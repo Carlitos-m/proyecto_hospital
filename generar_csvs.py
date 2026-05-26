@@ -12,6 +12,7 @@ hospac = pd.read_csv(RAW / "Hospac.csv", low_memory=False)
 hosffa = pd.read_csv(RAW / "Hosffa.csv", low_memory=False)
 hosreq = pd.read_csv(RAW / "Hosreq.csv", low_memory=False)
 hosfol = pd.read_csv(RAW / "Hosfol.csv", low_memory=False)
+hosder = pd.read_csv(RAW / "Hosder.csv", low_memory=False)
 # Hostransacciones no está disponible como CSV (solo en el ZIP parquet).
 # Se usa Hosfol (f_cargos / f_abonos) como proxy de movimientos por folio.
 
@@ -140,11 +141,16 @@ ep["grupo_facturacion"]  = ep["grupo_facturacion"].fillna("Sin facturas")
 ep["tiempo_ciclo_facturacion_horas"] = ep["tiempo_ciclo_facturacion_horas"].fillna(0)
 
 ep.to_csv(OUT / "episodios_dashboard.csv", index=False)
-print("✓ episodios_dashboard.csv")
+print("OK episodios_dashboard.csv")
 
 # ── 6. kpis_inicio.csv ────────────────────────────────────────────────────────
 total = len(ep)
-kpis = pd.DataFrame([{
+
+# Sección A: tarjetas KPI (1 fila)
+kpi_global = pd.DataFrame([{
+    "tipo_fila":                          "kpi_global",
+    "categoria":                          np.nan,
+    "conteo_episodios":                   np.nan,
     "total_episodios":                    total,
     "episodios_con_alta_medica":          int(ep["fecha_alta_medica"].notna().sum()),
     "episodios_con_alta_administrativa":  int(ep["fecha_alta_administrativa"].notna().sum()),
@@ -154,8 +160,42 @@ kpis = pd.DataFrame([{
     "porcentaje_retraso_24h":             round(ep["tiempo_alta_admin_horas"].gt(24).sum() / total * 100, 2),
     "porcentaje_casos_criticos":          round(ep["nivel_retraso"].eq("Crítico").sum() / total * 100, 2),
 }])
+
+_kpi_nulls = ["total_episodios", "episodios_con_alta_medica", "episodios_con_alta_administrativa",
+              "episodios_pendientes", "tiempo_promedio_alta_admin_horas",
+              "tiempo_mediana_alta_admin_horas", "porcentaje_retraso_24h", "porcentaje_casos_criticos"]
+
+# Sección B: casos por estatus de cierre (dona / barras)
+por_estatus = ep.groupby("estatus_cierre").agg(
+    conteo_episodios=("episodio_id", "count")
+).reset_index().rename(columns={"estatus_cierre": "categoria"})
+por_estatus["tipo_fila"] = "por_estatus"
+por_estatus[_kpi_nulls] = np.nan
+
+# Sección C: casos por nivel de retraso (barras) — orden lógico de menor a mayor
+_orden = {"Sin retraso": 0, "Retraso leve": 1, "Retraso moderado": 2, "Crítico": 3, "Pendiente": 4}
+por_nivel = ep.groupby("nivel_retraso").agg(
+    conteo_episodios=("episodio_id", "count")
+).reset_index().rename(columns={"nivel_retraso": "categoria"})
+por_nivel["tipo_fila"] = "por_nivel_retraso"
+por_nivel["_ord"] = por_nivel["categoria"].map(_orden)
+por_nivel = por_nivel.sort_values("_ord").drop(columns=["_ord"])
+por_nivel[_kpi_nulls] = np.nan
+
+# Sección D: distribución de tiempos de alta administrativa (barras por rangos)
+bins_t  = [-float("inf"), 0, 12, 24, 48, 72, float("inf")]
+labs_t  = ["Sin alta médica", "0-12h", "12-24h", "24-48h", "48-72h", ">72h"]
+ep["_rango_t"] = pd.cut(ep["tiempo_alta_admin_horas"], bins=bins_t, labels=labs_t, right=True)
+por_rango_t = ep.groupby("_rango_t", observed=True).agg(
+    conteo_episodios=("episodio_id", "count")
+).reset_index().rename(columns={"_rango_t": "categoria"})
+por_rango_t["tipo_fila"] = "rango_tiempo"
+por_rango_t[_kpi_nulls] = np.nan
+ep.drop(columns=["_rango_t"], inplace=True)
+
+kpis = pd.concat([kpi_global, por_estatus, por_nivel, por_rango_t], ignore_index=True)
 kpis.to_csv(OUT / "kpis_inicio.csv", index=False)
-print("✓ kpis_inicio.csv")
+print("OK kpis_inicio.csv")
 
 # ── 7. cuellos_botella.csv ────────────────────────────────────────────────────
 def etapa(df, col_ini, col_fin, nombre):
@@ -176,59 +216,91 @@ cuellos = pd.DataFrame([
     etapa(ep, "fecha_ultima_factura",    "fecha_alta_administrativa", "Última factura → Alta administrativa"),
 ])
 cuellos.to_csv(OUT / "cuellos_botella.csv", index=False)
-print("✓ cuellos_botella.csv")
+print("OK cuellos_botella.csv")
 
 # ── 8. facturacion_resumen.csv ────────────────────────────────────────────────
-# Sección A: KPIs globales (1 fila, tipo_fila = "kpi")
+_ciclo_valido = ep["tiempo_ciclo_facturacion_horas"][ep["tiempo_ciclo_facturacion_horas"] > 0]
+_idx_max_fac  = ep["num_facturas"].idxmax()
+
+# Sección A: KPIs globales
 fac_kpi = pd.DataFrame([{
     "tipo_fila":                               "kpi",
     "categoria":                               "global",
     "conteo_episodios":                        total,
+    "num_facturas":                            np.nan,
     "promedio_facturas_por_episodio":          round(ep["num_facturas"].mean(), 2),
     "pct_episodios_multiples_facturas":        round(ep["num_facturas"].gt(1).sum() / total * 100, 2),
-    "tiempo_promedio_ciclo_facturacion_horas": round(ep["tiempo_ciclo_facturacion_horas"].mean(), 2),
+    "tiempo_promedio_ciclo_facturacion_horas": round(_ciclo_valido.mean(), 2),
     "max_facturas_episodio":                   int(ep["num_facturas"].max()),
+    "episodio_max_facturas":                   ep.at[_idx_max_fac, "episodio_id"],
     "tiempo_promedio_alta_admin_horas":        round(ep["tiempo_alta_admin_horas"].mean(), 2),
+    "episodio_id":                             np.nan,
+    "folio":                                   np.nan,
+    "ext":                                     np.nan,
+    "fecha_primera_factura":                   np.nan,
+    "fecha_ultima_factura":                    np.nan,
+    "tiempo_ciclo_facturacion_horas":          np.nan,
+    "nivel_retraso":                           np.nan,
 }])
 
-# Sección B: por número de facturas (tipo_fila = "por_num_facturas")
+_fac_nulls = ["promedio_facturas_por_episodio", "pct_episodios_multiples_facturas",
+              "max_facturas_episodio", "episodio_max_facturas",
+              "episodio_id", "folio", "ext",
+              "fecha_primera_factura", "fecha_ultima_factura",
+              "tiempo_ciclo_facturacion_horas", "nivel_retraso"]
+
+# Sección B: tiempo promedio por número de facturas (barra)
 por_num = ep.groupby("num_facturas").agg(
-    conteo_episodios                = ("episodio_id", "count"),
-    tiempo_promedio_alta_admin_horas = ("tiempo_alta_admin_horas", "mean"),
+    conteo_episodios                        = ("episodio_id", "count"),
+    tiempo_promedio_alta_admin_horas        = ("tiempo_alta_admin_horas", "mean"),
     tiempo_promedio_ciclo_facturacion_horas = ("tiempo_ciclo_facturacion_horas", "mean"),
 ).reset_index().round(2)
 por_num["tipo_fila"] = "por_num_facturas"
-por_num["categoria"] = por_num["num_facturas"].astype(str)
-por_num.rename(columns={"num_facturas": "promedio_facturas_por_episodio"}, inplace=True)
-por_num[["pct_episodios_multiples_facturas", "max_facturas_episodio"]] = np.nan
+por_num["categoria"] = por_num["num_facturas"].astype(str) + " factura(s)"
+por_num[_fac_nulls] = np.nan
 
-# Sección C: por grupo (Una / Múltiples) (tipo_fila = "por_grupo")
+# Sección C: una factura vs múltiples (barras comparativas)
 por_grupo = ep.groupby("grupo_facturacion").agg(
-    conteo_episodios                = ("episodio_id", "count"),
-    tiempo_promedio_alta_admin_horas = ("tiempo_alta_admin_horas", "mean"),
+    conteo_episodios                        = ("episodio_id", "count"),
+    tiempo_promedio_alta_admin_horas        = ("tiempo_alta_admin_horas", "mean"),
     tiempo_promedio_ciclo_facturacion_horas = ("tiempo_ciclo_facturacion_horas", "mean"),
 ).reset_index().round(2)
 por_grupo["tipo_fila"] = "por_grupo"
 por_grupo.rename(columns={"grupo_facturacion": "categoria"}, inplace=True)
-por_grupo[["promedio_facturas_por_episodio", "pct_episodios_multiples_facturas", "max_facturas_episodio"]] = np.nan
+por_grupo["num_facturas"] = np.nan
+por_grupo[_fac_nulls] = np.nan
 
-# Sección D: rango de ciclo de facturación (tipo_fila = "rango_ciclo")
-bins   = [0, 12, 24, 48, 72, float("inf")]
-labels = ["0-12h", "12-24h", "24-48h", "48-72h", ">72h"]
-ep["rango_ciclo_tmp"] = pd.cut(ep["tiempo_ciclo_facturacion_horas"], bins=bins, labels=labels, right=True)
-rango_ciclo = ep.groupby("rango_ciclo_tmp", observed=True).agg(
-    conteo_episodios = ("episodio_id", "count"),
-).reset_index()
+# Sección D: distribución del ciclo de facturación (histograma)
+bins_c  = [0, 12, 24, 48, 72, float("inf")]
+labs_c  = ["0-12h", "12-24h", "24-48h", "48-72h", ">72h"]
+ep["_rango_c"] = pd.cut(ep["tiempo_ciclo_facturacion_horas"], bins=bins_c, labels=labs_c, right=True)
+rango_ciclo = ep.groupby("_rango_c", observed=True).agg(
+    conteo_episodios=("episodio_id", "count")
+).reset_index().rename(columns={"_rango_c": "categoria"})
 rango_ciclo["tipo_fila"] = "rango_ciclo"
-rango_ciclo.rename(columns={"rango_ciclo_tmp": "categoria"}, inplace=True)
-rango_ciclo[["promedio_facturas_por_episodio", "pct_episodios_multiples_facturas",
-             "max_facturas_episodio", "tiempo_promedio_alta_admin_horas",
-             "tiempo_promedio_ciclo_facturacion_horas"]] = np.nan
+rango_ciclo["num_facturas"] = np.nan
+rango_ciclo[["tiempo_promedio_alta_admin_horas", "tiempo_promedio_ciclo_facturacion_horas"]] = np.nan
+rango_ciclo[_fac_nulls] = np.nan
+ep.drop(columns=["_rango_c"], inplace=True)
 
-fac_res = pd.concat([fac_kpi, por_num, por_grupo, rango_ciclo], ignore_index=True)
+# Sección E: top 20 episodios con más facturas (tabla)
+top_fac = (
+    ep[ep["num_facturas"] > 0]
+    .nlargest(20, "num_facturas")
+    [["episodio_id", "folio", "ext", "num_facturas",
+      "fecha_primera_factura", "fecha_ultima_factura",
+      "tiempo_ciclo_facturacion_horas", "tiempo_alta_admin_horas", "nivel_retraso"]]
+    .copy()
+)
+top_fac["tipo_fila"] = "top_episodios"
+top_fac["categoria"] = np.nan
+top_fac[["conteo_episodios", "promedio_facturas_por_episodio", "pct_episodios_multiples_facturas",
+         "max_facturas_episodio", "episodio_max_facturas",
+         "tiempo_promedio_alta_admin_horas", "tiempo_promedio_ciclo_facturacion_horas"]] = np.nan
+
+fac_res = pd.concat([fac_kpi, por_num, por_grupo, rango_ciclo, top_fac], ignore_index=True)
 fac_res.to_csv(OUT / "facturacion_resumen.csv", index=False)
-print("✓ facturacion_resumen.csv")
-ep.drop(columns=["rango_ciclo_tmp"], inplace=True)
+print("OK facturacion_resumen.csv")
 
 # ── 9. transacciones_resumen.csv ─────────────────────────────────────────────
 # Sección A: KPIs globales
@@ -271,35 +343,90 @@ por_rango_t[["promedio_transacciones_por_episodio", "pct_con_transacciones_negat
 
 trans_res = pd.concat([trans_kpi, por_negativas, por_rango_t], ignore_index=True)
 trans_res.to_csv(OUT / "transacciones_resumen.csv", index=False)
-print("✓ transacciones_resumen.csv")
+print("OK transacciones_resumen.csv")
 ep.drop(columns=["tiene_negativas", "rango_trans_tmp"], inplace=True)
 
 # ── 10. requisiciones_resumen.csv ─────────────────────────────────────────────
+# Promedio de ítems por requisición (desde Hosder: líneas de detalle por num_req)
+_promedio_items = round(hosder.groupby("num_req").size().mean(), 2)
+
 # Sección A: KPIs globales
 req_kpi = pd.DataFrame([{
     "tipo_fila":                           "kpi",
-    "dep_sol_principal":                   "global",
+    "categoria":                           "global",
+    "dep_sol_principal":                   np.nan,
     "conteo_episodios":                    total,
-    "promedio_requisiciones_por_episodio": round(ep["num_requisiciones"].mean(), 2),
-    "pct_con_requisiciones":               round(ep["num_requisiciones"].gt(0).sum() / total * 100, 2),
+    "num_requisiciones":                   np.nan,
     "monto_total_requisiciones":           round(ep["monto_total_requisiciones"].sum(), 2),
     "tiempo_promedio_alta_admin_horas":    round(ep["tiempo_alta_admin_horas"].mean(), 2),
-    "num_requisiciones":                   np.nan,
+    "nivel_retraso_predominante":          ep["nivel_retraso"].mode().iloc[0],
+    "promedio_requisiciones_por_episodio": round(ep["num_requisiciones"].mean(), 2),
+    "pct_con_requisiciones":               round(ep["num_requisiciones"].gt(0).sum() / total * 100, 2),
+    "promedio_items_por_requisicion":      _promedio_items,
+    "episodio_id":                         np.nan,
+    "folio":                               np.nan,
+    "ext":                                 np.nan,
 }])
 
-# Sección B: por departamento solicitante
-por_dep = ep.groupby("dep_sol_principal").agg(
-    conteo_episodios               = ("episodio_id", "count"),
-    num_requisiciones              = ("num_requisiciones", "sum"),
-    monto_total_requisiciones      = ("monto_total_requisiciones", "sum"),
-    tiempo_promedio_alta_admin_horas = ("tiempo_alta_admin_horas", "mean"),
-).reset_index().round(2)
-por_dep["tipo_fila"] = "por_departamento"
-por_dep[["promedio_requisiciones_por_episodio", "pct_con_requisiciones"]] = np.nan
+_req_nulls = ["promedio_requisiciones_por_episodio", "pct_con_requisiciones",
+              "promedio_items_por_requisicion", "episodio_id", "folio", "ext"]
 
-req_res = pd.concat([req_kpi, por_dep], ignore_index=True)
+# Sección B: retraso promedio por departamento solicitante (ordenado de mayor a menor retraso)
+por_dep = (
+    ep[ep["dep_sol_principal"].notna()]
+    .groupby("dep_sol_principal")
+    .agg(
+        conteo_episodios               = ("episodio_id", "count"),
+        num_requisiciones              = ("num_requisiciones", "sum"),
+        monto_total_requisiciones      = ("monto_total_requisiciones", "sum"),
+        tiempo_promedio_alta_admin_horas = ("tiempo_alta_admin_horas", "mean"),
+        nivel_retraso_predominante     = ("nivel_retraso", lambda x: x.mode().iloc[0]),
+    )
+    .reset_index()
+    .round(2)
+    .sort_values("tiempo_promedio_alta_admin_horas", ascending=False)
+)
+por_dep["tipo_fila"] = "por_departamento"
+por_dep.rename(columns={"dep_sol_principal": "categoria"}, inplace=True)
+por_dep["dep_sol_principal"] = por_dep["categoria"]
+por_dep[_req_nulls] = np.nan
+
+# Sección C: requisiciones vs tiempo de alta (rangos de num_requisiciones)
+bins_r  = [-0.5, 0, 2, 5, 10, float("inf")]
+labs_r  = ["0", "1-2", "3-5", "6-10", ">10"]
+ep["_rango_r"] = pd.cut(ep["num_requisiciones"], bins=bins_r, labels=labs_r, right=True)
+por_rango_r = ep.groupby("_rango_r", observed=True).agg(
+    conteo_episodios               = ("episodio_id", "count"),
+    tiempo_promedio_alta_admin_horas = ("tiempo_alta_admin_horas", "mean"),
+    monto_total_requisiciones      = ("monto_total_requisiciones", "sum"),
+).reset_index().round(2).rename(columns={"_rango_r": "categoria"})
+por_rango_r["tipo_fila"] = "rango_requisiciones"
+por_rango_r["dep_sol_principal"] = np.nan
+por_rango_r["num_requisiciones"] = np.nan
+por_rango_r["nivel_retraso_predominante"] = np.nan
+por_rango_r[_req_nulls] = np.nan
+ep.drop(columns=["_rango_r"], inplace=True)
+
+# Sección D: top 20 episodios con más requisiciones (tabla)
+top_req = (
+    ep[ep["num_requisiciones"] > 0]
+    .nlargest(20, "num_requisiciones")
+    [["episodio_id", "folio", "ext", "num_requisiciones",
+      "monto_total_requisiciones", "dep_sol_principal",
+      "tiempo_alta_admin_horas", "nivel_retraso"]]
+    .copy()
+)
+top_req["tipo_fila"] = "top_episodios"
+top_req["categoria"] = np.nan
+top_req.rename(columns={
+    "tiempo_alta_admin_horas": "tiempo_promedio_alta_admin_horas",
+    "nivel_retraso":           "nivel_retraso_predominante",
+}, inplace=True)
+top_req[["conteo_episodios"] + _req_nulls] = np.nan
+
+req_res = pd.concat([req_kpi, por_dep, por_rango_r, top_req], ignore_index=True)
 req_res.to_csv(OUT / "requisiciones_resumen.csv", index=False)
-print("✓ requisiciones_resumen.csv")
+print("OK requisiciones_resumen.csv")
 
 # ── 11. monitor_operativo.csv ─────────────────────────────────────────────────
 monitor = (
@@ -318,6 +445,6 @@ monitor["tiene_transacciones"] = monitor["num_transacciones"].gt(0)
 monitor["tiene_requisiciones"] = monitor["num_requisiciones"].gt(0)
 
 monitor.to_csv(OUT / "monitor_operativo.csv", index=False)
-print("✓ monitor_operativo.csv")
+print("OK monitor_operativo.csv")
 
 print(f"\nListo. 7 CSVs en {OUT.resolve()}")
