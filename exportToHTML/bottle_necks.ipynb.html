@@ -1,0 +1,424 @@
+<html>
+<head>
+<title>bottle_necks.ipynb</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #7f848e;}
+.s1 { color: #abb2bf;}
+.s2 { color: #e06c75;}
+.s3 { color: #9da5b4;}
+.s4 { color: #e6c07b;}
+.s5 { color: #56b6c2;}
+.s6 { color: #c678dd;}
+</style>
+</head>
+<body bgcolor="#282c34">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+bottle_necks.ipynb</font>
+</center></td></tr></table>
+<pre><span class="s0">#%% md 
+</span><span class="s1"># Deteccion de cuellos de botella 
+</span><span class="s0">#%% md 
+</span><span class="s1">### Lo que queremos es encontrar los famosos cuellos de botella en el flujo de facturación 
+### ¿Cuál es el flujo? (en 'Happy path') 
+### Alta médica → Liquidación → Primera factura → Alta administrativa 
+ 
+### Cuando no funciona de una manera facil (en 'un happy path') 
+### Alta médica → ... → Primera factura → Revisión/ajuste/abono → Segunda factura → ... → Alta administrativa 
+</span><span class="s0">#%% md 
+</span><span class="s1">### Las tablas que vamos a usar: 
+#### 1.- Hospac: Tiene los datos generales (podria decirse que es la tabla central) 
+#### 2.- Hosfol: Tiene los folios/expedientes por lo que es el puente administrativo (fin e inicio de un folio) 
+#### 3.- Hosffa: Contiene las fechas de las facturas (primera y ultima factura) osea ciclos de facturación 
+#### 4.- Hostransacciones: Cuenta con las transacciones (Cargos, abonos, ajustes, cancelaciones, movimientos negativos y facturados.) 
+#### 5.- Hoshab: Aun si no están relacionadas los tipos de camas y habitaciones y los retrasos en el flujo de facturación (puede ayudar a encontrar problemas (patrones) en distintos perfiles del hospital 
+#### 6.- Hosreq: Tiene las solicitudes, aperturas, montos, departamento solicitante y relacion de episodios 
+#### 7.- Hosder: Contiene a detalle las requesiciones osea diferencias pedido vs surtido, devoluciones 
+#### 8.- Hostha: nombre legible del tipo de aviation (ayuda igual que Hoshab) 
+</span><span class="s0">#%% 
+# Importamos los dataframes</span>
+<span class="s2">import </span><span class="s1">pandas </span><span class="s2">as </span><span class="s1">pd</span>
+<span class="s2">from </span><span class="s1">src</span><span class="s3">.</span><span class="s1">hospital_app</span><span class="s3">.</span><span class="s1">data_loader </span><span class="s2">import </span><span class="s1">dfs</span><span class="s3">, </span><span class="s1">nuevas_llaves</span>
+<span class="s0">#%% md 
+</span><span class="s1">## Estrategia analitica-exploratoria 
+### Usaremos 5 layers (podemos verlas como 'etapas') basadas en el proceso de facturación 
+#### 1.) Pre facturacion tiempo entre alta medica (fecha de primera factura (fec_primera_fac) - fecha de salida (p_fec_sda) ) 
+#### 2.) Ciclo de facturación (Tiempo entre primera y última factura (rework)) 
+#### 3.) Transacciones/Correciones (Fricción financiera despues de la factura osea el que tanto se da el ciclo) 
+#### 4.) Requisiciones/Logística: vemos los trámites internos pendientes 
+#### 5.) Cierre administrativo: Tiempo desde ultima factura hasta la alta administrativa 
+</span><span class="s0">#%% 
+# viendo que tantos datos faltantes hay</span>
+<span class="s2">for </span><span class="s1">i </span><span class="s2">in </span><span class="s1">range</span><span class="s3">(</span><span class="s1">len</span><span class="s3">(</span><span class="s1">nuevas_llaves</span><span class="s3">))</span><span class="s2">:</span>
+    <span class="s1">print</span><span class="s3">(</span><span class="s4">f&quot;Tabla: </span><span class="s5">{</span><span class="s1">nuevas_llaves</span><span class="s3">[</span><span class="s1">i</span><span class="s3">]</span><span class="s5">} </span><span class="s4">valores faltantes: </span><span class="s5">{</span><span class="s1">dfs</span><span class="s3">[</span><span class="s1">nuevas_llaves</span><span class="s3">[</span><span class="s1">i</span><span class="s3">]].</span><span class="s1">isna</span><span class="s3">().</span><span class="s1">sum</span><span class="s3">().</span><span class="s1">sum</span><span class="s3">()</span><span class="s5">}</span><span class="s4">&quot;</span><span class="s3">)</span>
+<span class="s0">#%% 
+</span><span class="s1">dfs</span><span class="s3">[</span><span class="s4">'Hostransacciones'</span><span class="s3">][</span><span class="s4">'internoexterno'</span><span class="s3">].</span><span class="s1">unique</span><span class="s3">()</span>
+<span class="s0">#%% md 
+</span><span class="s1">#### Nota acerca de la columna internoexterno: 
+#### interno externo: Paciente interno/externo 
+</span><span class="s0">#%% md 
+</span>
+<span class="s1">#### Importacion (poniendo nuestros jugetes (librerias) en nuestro tablero de batalla) 
+</span><span class="s0">#%% 
+</span><span class="s2">import </span><span class="s1">pandas </span><span class="s2">as </span><span class="s1">pd</span>
+<span class="s2">import </span><span class="s1">numpy </span><span class="s2">as </span><span class="s1">np</span>
+<span class="s2">import </span><span class="s1">matplotlib</span><span class="s3">.</span><span class="s1">pyplot </span><span class="s2">as </span><span class="s1">plt</span>
+<span class="s2">import </span><span class="s1">plotly</span><span class="s3">.</span><span class="s1">express </span><span class="s2">as </span><span class="s1">px</span>
+<span class="s2">import </span><span class="s1">seaborn </span><span class="s2">as </span><span class="s1">sns</span>
+<span class="s2">from </span><span class="s1">sklearn</span><span class="s3">.</span><span class="s1">ensemble </span><span class="s2">import </span><span class="s1">RandomForestClassifier</span>
+<span class="s2">from </span><span class="s1">sklearn</span><span class="s3">.</span><span class="s1">preprocessing </span><span class="s2">import </span><span class="s1">LabelEncoder</span>
+<span class="s2">from </span><span class="s1">sklearn</span><span class="s3">.</span><span class="s1">model_selection </span><span class="s2">import </span><span class="s1">train_test_split</span>
+<span class="s2">from </span><span class="s1">sklearn</span><span class="s3">.</span><span class="s1">metrics </span><span class="s2">import </span><span class="s1">classification_report</span>
+<span class="s2">import </span><span class="s1">warnings</span>
+<span class="s1">warnings</span><span class="s3">.</span><span class="s1">filterwarnings</span><span class="s3">(</span><span class="s4">'ignore'</span><span class="s3">)</span>
+<span class="s0">#%% 
+</span><span class="s1">plt</span><span class="s3">.</span><span class="s1">rcParams</span><span class="s3">[</span><span class="s4">'figure.figsize'</span><span class="s3">] </span><span class="s2">= </span><span class="s3">(</span><span class="s6">12</span><span class="s3">, </span><span class="s6">6</span><span class="s3">)</span>
+<span class="s1">sns</span><span class="s3">.</span><span class="s1">set_style</span><span class="s3">(</span><span class="s4">&quot;whitegrid&quot;</span><span class="s3">)</span>
+<span class="s0">#%% 
+# para facilidad de notacion</span>
+<span class="s2">for </span><span class="s1">i </span><span class="s2">in </span><span class="s1">nuevas_llaves</span><span class="s2">:</span>
+    <span class="s1">print</span><span class="s3">(</span><span class="s4">f&quot;df_</span><span class="s5">{</span><span class="s1">i</span><span class="s5">}</span><span class="s4">=dfs['</span><span class="s5">{</span><span class="s1">i</span><span class="s5">}</span><span class="s4">']&quot;</span><span class="s3">)</span>
+<span class="s0">#%% 
+</span><span class="s1">df_Hosder</span><span class="s2">=</span><span class="s1">dfs</span><span class="s3">[</span><span class="s4">'Hosder'</span><span class="s3">]</span>
+<span class="s1">df_Hosffa</span><span class="s2">=</span><span class="s1">dfs</span><span class="s3">[</span><span class="s4">'Hosffa'</span><span class="s3">]</span>
+<span class="s1">df_Hosfol</span><span class="s2">=</span><span class="s1">dfs</span><span class="s3">[</span><span class="s4">'Hosfol'</span><span class="s3">]</span>
+<span class="s1">df_Hoshab</span><span class="s2">=</span><span class="s1">dfs</span><span class="s3">[</span><span class="s4">'Hoshab'</span><span class="s3">]</span>
+<span class="s1">df_Hospac</span><span class="s2">=</span><span class="s1">dfs</span><span class="s3">[</span><span class="s4">'Hospac'</span><span class="s3">]</span>
+<span class="s1">df_Hosreq</span><span class="s2">=</span><span class="s1">dfs</span><span class="s3">[</span><span class="s4">'Hosreq'</span><span class="s3">]</span>
+<span class="s1">df_Hostha</span><span class="s2">=</span><span class="s1">dfs</span><span class="s3">[</span><span class="s4">'Hostha'</span><span class="s3">]</span>
+<span class="s1">df_Hostransacciones</span><span class="s2">=</span><span class="s1">dfs</span><span class="s3">[</span><span class="s4">'Hostransacciones'</span><span class="s3">]</span>
+
+<span class="s0">#%% md 
+</span><span class="s1">## ¿Qué tantos datos tenemos acerca del proceso? 
+</span><span class="s0">#%% 
+# Dado que nuestro problema es temporal revisamos que tengamos los datos</span>
+
+<span class="s0"># para Hospac</span>
+<span class="s1">print</span><span class="s3">(</span><span class="s4">&quot;=== 1.1 COBERTURA TEMPORAL EN HOSPAC ===&quot;</span><span class="s3">)</span>
+<span class="s1">print</span><span class="s3">(</span><span class="s4">f&quot;Registros HOSPAC: </span><span class="s5">{</span><span class="s1">len</span><span class="s3">(</span><span class="s1">df_Hospac</span><span class="s3">)</span><span class="s5">:</span><span class="s4">,</span><span class="s5">}</span><span class="s4">&quot;</span><span class="s3">)</span>
+<span class="s1">print</span><span class="s3">(</span><span class="s4">f&quot;Con fecha llegada (p_fec_lld): </span><span class="s5">{</span><span class="s1">df_Hospac</span><span class="s3">[</span><span class="s4">'p_fec_lld'</span><span class="s3">].</span><span class="s1">notna</span><span class="s3">().</span><span class="s1">sum</span><span class="s3">()</span><span class="s5">:</span><span class="s4">,</span><span class="s5">}</span><span class="s4">&quot;</span><span class="s3">)</span>
+<span class="s1">print</span><span class="s3">(</span><span class="s4">f&quot;Con fecha alta médica (p_fec_sda): </span><span class="s5">{</span><span class="s1">df_Hospac</span><span class="s3">[</span><span class="s4">'p_fec_sda'</span><span class="s3">].</span><span class="s1">notna</span><span class="s3">().</span><span class="s1">sum</span><span class="s3">()</span><span class="s5">:</span><span class="s4">,</span><span class="s5">}</span><span class="s4">&quot;</span><span class="s3">)</span>
+<span class="s1">print</span><span class="s3">(</span><span class="s4">f&quot;Con fecha alta médica (p_fec_sda): </span><span class="s5">{</span><span class="s1">df_Hospac</span><span class="s3">[</span><span class="s4">'p_fec_sda'</span><span class="s3">].</span><span class="s1">notna</span><span class="s3">().</span><span class="s1">sum</span><span class="s3">()</span><span class="s5">:</span><span class="s4">,</span><span class="s5">}</span><span class="s4">&quot;</span><span class="s3">)</span>
+
+<span class="s0"># para la tabla Hosfol</span>
+<span class="s1">print</span><span class="s3">(</span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">=== 1.2 COBERTURA DE LLAVES HOSFOL ===&quot;</span><span class="s3">)</span>
+<span class="s1">print</span><span class="s3">(</span><span class="s4">f&quot;Folios con expediente (f_num_exp): </span><span class="s5">{</span><span class="s1">df_Hosfol</span><span class="s3">[</span><span class="s4">'f_num_exp'</span><span class="s3">].</span><span class="s1">notna</span><span class="s3">().</span><span class="s1">sum</span><span class="s3">()</span><span class="s5">:</span><span class="s4">,</span><span class="s5">}</span><span class="s4">&quot;</span><span class="s3">)</span>
+<span class="s0">#%% 
+</span><span class="s1">print</span><span class="s3">(</span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">=== 1.3 FACTURACIÓN: ¿1 factura o muchas? ===&quot;</span><span class="s3">)</span>
+<span class="s1">fac_por_folio </span><span class="s2">= </span><span class="s1">df_Hosffa</span><span class="s3">.</span><span class="s1">groupby</span><span class="s3">([</span><span class="s4">'folio'</span><span class="s3">,</span><span class="s4">'ext'</span><span class="s3">]).</span><span class="s1">size</span><span class="s3">()</span>
+<span class="s1">print</span><span class="s3">(</span><span class="s4">f&quot;Promedio facturas por folio: </span><span class="s5">{</span><span class="s1">fac_por_folio</span><span class="s3">.</span><span class="s1">mean</span><span class="s3">()</span><span class="s5">:</span><span class="s4">.2f</span><span class="s5">}</span><span class="s4">&quot;</span><span class="s3">)</span>
+<span class="s1">print</span><span class="s3">(</span><span class="s4">f&quot;% de folios con &gt;1 factura: </span><span class="s5">{</span><span class="s3">(</span><span class="s1">fac_por_folio </span><span class="s2">&gt; </span><span class="s6">1</span><span class="s3">).</span><span class="s1">mean</span><span class="s3">()</span><span class="s2">*</span><span class="s6">100</span><span class="s5">:</span><span class="s4">.1f</span><span class="s5">}</span><span class="s4">%&quot;</span><span class="s3">)</span>
+<span class="s0">#%% md 
+</span><span class="s1">#### veamos que tanta friccion hay (pequeños fallos) 
+</span><span class="s0">#%% 
+</span><span class="s1">print</span><span class="s3">(</span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">=== 1.4 TRANSACCIONES: ¿Hay fricción? ===&quot;</span><span class="s3">)</span>
+<span class="s2">if </span><span class="s4">'total' </span><span class="s2">in </span><span class="s1">df_Hostransacciones</span><span class="s3">.</span><span class="s1">columns</span><span class="s2">:</span>
+    <span class="s1">df_Hostransacciones</span><span class="s3">[</span><span class="s4">'total_num'</span><span class="s3">] </span><span class="s2">= </span><span class="s1">pd</span><span class="s3">.</span><span class="s1">to_numeric</span><span class="s3">(</span><span class="s1">df_Hostransacciones</span><span class="s3">[</span><span class="s4">'total'</span><span class="s3">], </span><span class="s1">errors</span><span class="s2">=</span><span class="s4">'coerce'</span><span class="s3">)</span>
+    <span class="s1">neg </span><span class="s2">= </span><span class="s3">(</span><span class="s1">df_Hostransacciones</span><span class="s3">[</span><span class="s4">'total_num'</span><span class="s3">] </span><span class="s2">&lt; </span><span class="s6">0</span><span class="s3">).</span><span class="s1">sum</span><span class="s3">()</span>
+    <span class="s1">print</span><span class="s3">(</span><span class="s4">f&quot;Transacciones negativas: </span><span class="s5">{</span><span class="s1">neg</span><span class="s5">:</span><span class="s4">,</span><span class="s5">} </span><span class="s4">(</span><span class="s5">{</span><span class="s1">neg</span><span class="s2">/</span><span class="s1">len</span><span class="s3">(</span><span class="s1">df_Hostransacciones</span><span class="s3">)</span><span class="s2">*</span><span class="s6">100</span><span class="s5">:</span><span class="s4">.1f</span><span class="s5">}</span><span class="s4">%)&quot;</span><span class="s3">)</span>
+<span class="s0">#%% 
+</span><span class="s1">print</span><span class="s3">(</span><span class="s4">f'Esto nos quiere decir que solo un </span><span class="s5">{</span><span class="s1">neg</span><span class="s2">/</span><span class="s1">len</span><span class="s3">(</span><span class="s1">df_Hostransacciones</span><span class="s3">)</span><span class="s2">*</span><span class="s6">100</span><span class="s5">:</span><span class="s4">.2f</span><span class="s5">}</span><span class="s4">% son negatias en la base de datos'</span><span class="s3">)</span>
+<span class="s0">#%% md 
+</span><span class="s1">### veamos Hosreq 
+#### Hosreq es la tabla de requesiciones 
+#### Veamos que tipo de valores tiene 
+</span><span class="s0">#%% 
+</span><span class="s1">print</span><span class="s3">(</span><span class="s1">set</span><span class="s3">(</span><span class="s1">df_Hosreq</span><span class="s3">[</span><span class="s4">'st_req'</span><span class="s3">]))</span>
+<span class="s0">#%% md 
+</span><span class="s1">¿Que significa? 
+bueno estamos en el contexto de un hospital mexicano en el que se usan estos codigos numericos (en formato de string) 
+| Código | Probable significado                             | 
+| ------ | ------------------------------------------------ | 
+| `'00'` | Requisición **abierta / pendiente / solicitada** | 
+| `'01'` | Requisición **surtida / cerrada / completada**   | 
+| `'03'` | Requisición **parcialmente surtida**             | 
+| `'05'` | Requisición **cancelada**                        | 
+| `'-1'` | **Error / nulo / estado inválido** (legacy)      | 
+ 
+</span><span class="s0">#%% 
+</span><span class="s1">df_Hosreq</span><span class="s3">.</span><span class="s1">shape</span>
+<span class="s0">#%% 
+# veamos la distribucion de estas categorias</span>
+<span class="s1">conteo</span><span class="s2">=</span><span class="s1">df_Hosreq</span><span class="s3">[</span><span class="s4">'st_req'</span><span class="s3">].</span><span class="s1">value_counts</span><span class="s3">().</span><span class="s1">reset_index</span><span class="s3">()</span>
+<span class="s1">conteo</span><span class="s3">.</span><span class="s1">columns</span><span class="s2">=</span><span class="s3">[</span><span class="s4">'st_req'</span><span class="s3">,</span><span class="s4">'count'</span><span class="s3">]</span>
+<span class="s1">fig</span><span class="s2">=</span><span class="s1">px</span><span class="s3">.</span><span class="s1">pie</span><span class="s3">(</span><span class="s1">conteo</span><span class="s3">,</span><span class="s1">values</span><span class="s2">=</span><span class="s4">'count'</span><span class="s3">,</span><span class="s1">names</span><span class="s2">=</span><span class="s4">'st_req'</span><span class="s3">)</span>
+<span class="s1">print</span><span class="s3">(</span><span class="s1">conteo</span><span class="s3">[</span><span class="s4">'count'</span><span class="s3">])</span>
+<span class="s1">fig</span><span class="s3">.</span><span class="s1">show</span><span class="s3">()</span>
+<span class="s0">#%% 
+</span><span class="s1">df_hosreq</span><span class="s2">=</span><span class="s1">df_Hosreq</span>
+<span class="s0">#%% 
+</span><span class="s1">print</span><span class="s3">(</span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">=== 1.5 REQUISICIONES: ¿Hay pendientes? ===&quot;</span><span class="s3">)</span>
+<span class="s2">if </span><span class="s4">'st_req' </span><span class="s2">in </span><span class="s1">df_hosreq</span><span class="s3">.</span><span class="s1">columns</span><span class="s2">:</span>
+    <span class="s0"># Primero, veamos la distribución real</span>
+    <span class="s1">print</span><span class="s3">(</span><span class="s4">&quot;Distribución de st_req:&quot;</span><span class="s3">)</span>
+    <span class="s1">print</span><span class="s3">(</span><span class="s1">df_hosreq</span><span class="s3">[</span><span class="s4">'st_req'</span><span class="s3">].</span><span class="s1">value_counts</span><span class="s3">().</span><span class="s1">sort_index</span><span class="s3">())</span>
+
+    <span class="s0"># Definir qué códigos significan &quot;pendiente&quot; o &quot;no resuelto&quot;</span>
+    <span class="s0"># Basado en convención típica de HIS mexicanos:</span>
+    <span class="s1">estados_pendientes </span><span class="s2">= </span><span class="s3">{</span><span class="s4">'00'</span><span class="s3">, </span><span class="s4">'03'</span><span class="s3">}  </span><span class="s0"># abierta + parcial</span>
+    <span class="s1">estados_cerrados </span><span class="s2">= </span><span class="s3">{</span><span class="s4">'01'</span><span class="s3">}          </span><span class="s0"># surtida</span>
+    <span class="s1">estados_cancelados </span><span class="s2">= </span><span class="s3">{</span><span class="s4">'05'</span><span class="s3">}        </span><span class="s0"># cancelada</span>
+    <span class="s1">estados_invalidos </span><span class="s2">= </span><span class="s3">{</span><span class="s4">'-1'</span><span class="s3">}         </span><span class="s0"># nulo/error</span>
+
+    <span class="s1">pendientes </span><span class="s2">= </span><span class="s1">df_hosreq</span><span class="s3">[</span><span class="s4">'st_req'</span><span class="s3">].</span><span class="s1">isin</span><span class="s3">(</span><span class="s1">estados_pendientes</span><span class="s3">).</span><span class="s1">sum</span><span class="s3">()</span>
+    <span class="s1">cerradas </span><span class="s2">= </span><span class="s1">df_hosreq</span><span class="s3">[</span><span class="s4">'st_req'</span><span class="s3">].</span><span class="s1">isin</span><span class="s3">(</span><span class="s1">estados_cerrados</span><span class="s3">).</span><span class="s1">sum</span><span class="s3">()</span>
+    <span class="s1">canceladas </span><span class="s2">= </span><span class="s1">df_hosreq</span><span class="s3">[</span><span class="s4">'st_req'</span><span class="s3">].</span><span class="s1">isin</span><span class="s3">(</span><span class="s1">estados_cancelados</span><span class="s3">).</span><span class="s1">sum</span><span class="s3">()</span>
+    <span class="s1">invalidos </span><span class="s2">= </span><span class="s1">df_hosreq</span><span class="s3">[</span><span class="s4">'st_req'</span><span class="s3">].</span><span class="s1">isin</span><span class="s3">(</span><span class="s1">estados_invalidos</span><span class="s3">).</span><span class="s1">sum</span><span class="s3">()</span>
+
+    <span class="s1">print</span><span class="s3">(</span><span class="s4">f&quot;</span><span class="s5">\n</span><span class="s4">Requisiciones pendientes (00, 03):     </span><span class="s5">{</span><span class="s1">pendientes</span><span class="s5">:</span><span class="s4">,</span><span class="s5">}</span><span class="s4">&quot;</span><span class="s3">)</span>
+    <span class="s1">print</span><span class="s3">(</span><span class="s4">f&quot;Requisiciones surtidas (01):           </span><span class="s5">{</span><span class="s1">cerradas</span><span class="s5">:</span><span class="s4">,</span><span class="s5">}</span><span class="s4">&quot;</span><span class="s3">)</span>
+    <span class="s1">print</span><span class="s3">(</span><span class="s4">f&quot;Requisiciones canceladas (05):         </span><span class="s5">{</span><span class="s1">canceladas</span><span class="s5">:</span><span class="s4">,</span><span class="s5">}</span><span class="s4">&quot;</span><span class="s3">)</span>
+    <span class="s1">print</span><span class="s3">(</span><span class="s4">f&quot;Requisiciones con estado inválido (-1): </span><span class="s5">{</span><span class="s1">invalidos</span><span class="s5">:</span><span class="s4">,</span><span class="s5">}</span><span class="s4">&quot;</span><span class="s3">)</span>
+
+    <span class="s0"># El flag que te interesa para cuello de botella:</span>
+    <span class="s1">pct_pendientes </span><span class="s2">= </span><span class="s1">pendientes </span><span class="s2">/ </span><span class="s1">len</span><span class="s3">(</span><span class="s1">df_hosreq</span><span class="s3">) </span><span class="s2">* </span><span class="s6">100</span>
+    <span class="s1">print</span><span class="s3">(</span><span class="s4">f&quot;</span><span class="s5">\n</span><span class="s4">Porcentaje de requisiciones NO cerradas: </span><span class="s5">{</span><span class="s1">pct_pendientes</span><span class="s5">:</span><span class="s4">.1f</span><span class="s5">}</span><span class="s4">%&quot;</span><span class="s3">)</span>
+<span class="s0">#%% 
+</span><span class="s1">print</span><span class="s3">(</span><span class="s4">&quot;</span><span class="s5">\n</span><span class="s4">=== 1.6 RESUMEN DE CALIDAD ===&quot;</span><span class="s3">)</span>
+<span class="s0"># Esto define tu poder de análisis</span>
+<span class="s1">total </span><span class="s2">= </span><span class="s1">len</span><span class="s3">(</span><span class="s1">df_Hospac</span><span class="s3">)</span>
+<span class="s1">con_alta_med </span><span class="s2">= </span><span class="s1">df_Hospac</span><span class="s3">[</span><span class="s4">'p_fec_sda'</span><span class="s3">].</span><span class="s1">notna</span><span class="s3">().</span><span class="s1">sum</span><span class="s3">()</span>
+<span class="s1">con_folio </span><span class="s2">= </span><span class="s1">df_Hosfol</span><span class="s3">[</span><span class="s4">'f_num_exp'</span><span class="s3">].</span><span class="s1">notna</span><span class="s3">().</span><span class="s1">sum</span><span class="s3">()</span>
+<span class="s1">con_fac </span><span class="s2">= </span><span class="s1">df_Hosffa</span><span class="s3">[</span><span class="s4">'folio'</span><span class="s3">].</span><span class="s1">notna</span><span class="s3">().</span><span class="s1">sum</span><span class="s3">()</span>
+<span class="s1">print</span><span class="s3">(</span><span class="s4">f&quot;&quot;&quot;</span>
+<span class="s4">Episodios totales:              </span><span class="s5">{</span><span class="s1">total</span><span class="s5">:</span><span class="s4">,</span><span class="s5">}</span>
+<span class="s4">Con alta médica:                </span><span class="s5">{</span><span class="s1">con_alta_med</span><span class="s5">:</span><span class="s4">,</span><span class="s5">} </span><span class="s4">(</span><span class="s5">{</span><span class="s1">con_alta_med</span><span class="s2">/</span><span class="s1">total</span><span class="s2">*</span><span class="s6">100</span><span class="s5">:</span><span class="s4">.1f</span><span class="s5">}</span><span class="s4">%)</span>
+<span class="s4">Con folio administrativo:       </span><span class="s5">{</span><span class="s1">con_folio</span><span class="s5">:</span><span class="s4">,</span><span class="s5">}</span>
+<span class="s4">Con al menos 1 factura:         </span><span class="s5">{</span><span class="s1">con_fac</span><span class="s5">:</span><span class="s4">,</span><span class="s5">}</span>
+<span class="s4">&quot;&quot;&quot;</span><span class="s3">)</span>
+<span class="s0">#%% md 
+</span><span class="s1">### Construccion de la tabla 
+### &quot;La tabla maestra&quot; 
+####  Que es esta tabla ? 
+#### esta tabla lo que hace es tener de 
+</span><span class="s0">#%% md 
+</span><span class="s1">### Nota: 
+#### p_fec_sda (alta médica) y alguna fecha de cierre/alta 
+</span><span class="s0">#%% 
+</span><span class="s1">df_Hospac</span><span class="s3">[</span><span class="s4">'p_fec_sda'</span><span class="s3">].</span><span class="s1">dtypes</span>
+<span class="s0">#%% 
+</span><span class="s1">df_Hospac</span><span class="s3">.</span><span class="s1">_get_numeric_data</span><span class="s3">().</span><span class="s1">columns</span>
+<span class="s0">#%% 
+</span><span class="s1">df_pac</span><span class="s2">=</span><span class="s1">df_Hospac</span>
+<span class="s1">df_pac</span><span class="s3">[</span><span class="s4">'p_fec_lld'</span><span class="s3">] </span><span class="s2">= </span><span class="s1">pd</span><span class="s3">.</span><span class="s1">to_datetime</span><span class="s3">(</span><span class="s1">df_pac</span><span class="s3">[</span><span class="s4">'p_fec_lld'</span><span class="s3">], </span><span class="s1">errors</span><span class="s2">=</span><span class="s4">'coerce'</span><span class="s3">)</span>
+<span class="s1">df_pac</span><span class="s3">[</span><span class="s4">'p_fec_sda'</span><span class="s3">] </span><span class="s2">= </span><span class="s1">pd</span><span class="s3">.</span><span class="s1">to_datetime</span><span class="s3">(</span><span class="s1">df_pac</span><span class="s3">[</span><span class="s4">'p_fec_sda'</span><span class="s3">], </span><span class="s1">errors</span><span class="s2">=</span><span class="s4">'coerce'</span><span class="s3">)</span>
+<span class="s0">#%% 
+</span><span class="s1">pd</span><span class="s3">.</span><span class="s1">concat</span><span class="s3">([</span><span class="s1">df_pac</span><span class="s3">[</span><span class="s4">'p_fec_lld'</span><span class="s3">],</span><span class="s1">df_pac</span><span class="s3">[</span><span class="s4">'p_fec_sda'</span><span class="s3">]],</span><span class="s1">axis</span><span class="s2">=</span><span class="s6">1</span><span class="s3">).</span><span class="s1">tail</span><span class="s3">()</span>
+<span class="s0">#%% md 
+</span>
+<span class="s0">#%% 
+</span><span class="s1">df_fol </span><span class="s2">= </span><span class="s1">df_Hosfol</span><span class="s3">.</span><span class="s1">copy</span><span class="s3">()</span>
+<span class="s1">df_fol</span><span class="s3">[</span><span class="s4">'f_fec_ape'</span><span class="s3">] </span><span class="s2">= </span><span class="s1">pd</span><span class="s3">.</span><span class="s1">to_datetime</span><span class="s3">(</span><span class="s1">df_fol</span><span class="s3">[</span><span class="s4">'f_fec_ape'</span><span class="s3">], </span><span class="s1">errors</span><span class="s2">=</span><span class="s4">'coerce'</span><span class="s3">)</span>
+<span class="s1">df_fol</span><span class="s3">[</span><span class="s4">'f_fec_cie'</span><span class="s3">] </span><span class="s2">= </span><span class="s1">pd</span><span class="s3">.</span><span class="s1">to_datetime</span><span class="s3">(</span><span class="s1">df_fol</span><span class="s3">[</span><span class="s4">'f_fec_cie'</span><span class="s3">], </span><span class="s1">errors</span><span class="s2">=</span><span class="s4">'coerce'</span><span class="s3">)</span>
+<span class="s1">pd</span><span class="s3">.</span><span class="s1">concat</span><span class="s3">([</span><span class="s1">df_fol</span><span class="s3">[</span><span class="s4">'f_fec_ape'</span><span class="s3">],</span><span class="s1">df_fol</span><span class="s3">[</span><span class="s4">'f_fec_cie'</span><span class="s3">]],</span><span class="s1">axis</span><span class="s2">=</span><span class="s6">1</span><span class="s3">)</span>
+<span class="s0">#%% 
+</span><span class="s1">df_fac </span><span class="s2">= </span><span class="s1">df_Hosffa</span><span class="s3">.</span><span class="s1">copy</span><span class="s3">()</span>
+<span class="s1">df_fac</span><span class="s3">[</span><span class="s4">'f_fac'</span><span class="s3">] </span><span class="s2">= </span><span class="s1">pd</span><span class="s3">.</span><span class="s1">to_datetime</span><span class="s3">(</span><span class="s1">df_fac</span><span class="s3">[</span><span class="s4">'f_fac'</span><span class="s3">], </span><span class="s1">errors</span><span class="s2">=</span><span class="s4">'coerce'</span><span class="s3">)</span>
+<span class="s1">df_fac</span><span class="s3">[</span><span class="s4">'total_num'</span><span class="s3">] </span><span class="s2">= </span><span class="s1">pd</span><span class="s3">.</span><span class="s1">to_numeric</span><span class="s3">(</span><span class="s1">df_fac</span><span class="s3">[</span><span class="s4">'total'</span><span class="s3">], </span><span class="s1">errors</span><span class="s2">=</span><span class="s4">'coerce'</span><span class="s3">)</span>
+
+<span class="s1">df_trans </span><span class="s2">= </span><span class="s1">df_Hostransacciones</span><span class="s3">.</span><span class="s1">copy</span><span class="s3">()</span>
+<span class="s1">df_trans</span><span class="s3">[</span><span class="s4">'fecha'</span><span class="s3">] </span><span class="s2">= </span><span class="s1">pd</span><span class="s3">.</span><span class="s1">to_datetime</span><span class="s3">(</span><span class="s1">df_trans</span><span class="s3">[</span><span class="s4">'fecha'</span><span class="s3">], </span><span class="s1">errors</span><span class="s2">=</span><span class="s4">'coerce'</span><span class="s3">)</span>
+<span class="s1">df_trans</span><span class="s3">[</span><span class="s4">'total_num'</span><span class="s3">] </span><span class="s2">= </span><span class="s1">pd</span><span class="s3">.</span><span class="s1">to_numeric</span><span class="s3">(</span><span class="s1">df_trans</span><span class="s3">[</span><span class="s4">'total'</span><span class="s3">], </span><span class="s1">errors</span><span class="s2">=</span><span class="s4">'coerce'</span><span class="s3">)</span>
+
+<span class="s0">#%% 
+</span><span class="s1">check</span><span class="s2">=</span><span class="s1">pd</span><span class="s3">.</span><span class="s1">concat</span><span class="s3">([</span><span class="s1">df_trans</span><span class="s3">[</span><span class="s4">'fecha'</span><span class="s3">],</span><span class="s1">df_trans</span><span class="s3">[</span><span class="s4">'total_num'</span><span class="s3">]],</span><span class="s1">axis</span><span class="s2">=</span><span class="s6">1</span><span class="s3">)</span>
+<span class="s1">check</span><span class="s3">[</span><span class="s6">0</span><span class="s2">:</span><span class="s6">10</span><span class="s3">]</span>
+<span class="s0">#%% 
+</span><span class="s1">fig</span><span class="s2">=</span><span class="s1">px</span><span class="s3">.</span><span class="s1">line</span><span class="s3">(</span><span class="s1">check</span><span class="s3">,</span><span class="s1">x</span><span class="s2">=</span><span class="s4">'fecha'</span><span class="s3">,</span><span class="s1">y</span><span class="s2">=</span><span class="s4">'total_num'</span><span class="s3">)</span>
+<span class="s1">fig</span><span class="s3">.</span><span class="s1">show</span><span class="s3">()</span>
+<span class="s0">#%% 
+</span><span class="s1">df_req </span><span class="s2">= </span><span class="s1">df_hosreq</span><span class="s3">.</span><span class="s1">copy</span><span class="s3">()</span>
+<span class="s1">df_req</span><span class="s3">[</span><span class="s4">'fec_sol'</span><span class="s3">] </span><span class="s2">= </span><span class="s1">pd</span><span class="s3">.</span><span class="s1">to_datetime</span><span class="s3">(</span><span class="s1">df_req</span><span class="s3">[</span><span class="s4">'fec_sol'</span><span class="s3">], </span><span class="s1">errors</span><span class="s2">=</span><span class="s4">'coerce'</span><span class="s3">)</span>
+<span class="s0">#%% 
+</span><span class="s1">df_trans</span><span class="s3">[</span><span class="s4">'cancelada'</span><span class="s3">].</span><span class="s1">unique</span><span class="s3">()</span>
+<span class="s0">#%% 
+</span><span class="s1">df_fac</span><span class="s3">.</span><span class="s1">shape</span>
+<span class="s0">#%% 
+</span><span class="s1">df_Hosffa</span><span class="s3">.</span><span class="s1">columns</span>
+<span class="s0">#%% 
+</span><span class="s1">df_trans</span><span class="s3">[</span><span class="s4">'cancelada'</span><span class="s3">].</span><span class="s1">unique</span><span class="s3">()</span>
+<span class="s0">#%% 
+# === 2.1 LIMPIEZA DE FECHAS ===df_pac = df_hospac.copy()</span>
+
+<span class="s1">df_req </span><span class="s2">= </span><span class="s1">df_Hosreq</span><span class="s3">.</span><span class="s1">copy</span><span class="s3">()</span>
+<span class="s1">df_req</span><span class="s3">[</span><span class="s4">'fec_sol'</span><span class="s3">] </span><span class="s2">= </span><span class="s1">pd</span><span class="s3">.</span><span class="s1">to_datetime</span><span class="s3">(</span><span class="s1">df_req</span><span class="s3">[</span><span class="s4">'fec_sol'</span><span class="s3">], </span><span class="s1">errors</span><span class="s2">=</span><span class="s4">'coerce'</span><span class="s3">)</span>
+
+<span class="s0"># === 2.2 AGREGAR HOSFOL (1 expediente = 1 o más folios) ===</span>
+<span class="s1">fol_agg </span><span class="s2">= </span><span class="s1">df_fol</span><span class="s3">.</span><span class="s1">groupby</span><span class="s3">(</span><span class="s4">'f_num_exp'</span><span class="s3">).</span><span class="s1">agg</span><span class="s3">({</span>
+    <span class="s4">'f_folio'</span><span class="s2">: </span><span class="s4">'count'</span><span class="s3">,</span>
+    <span class="s4">'f_fec_ape'</span><span class="s2">: </span><span class="s4">'min'</span><span class="s3">,</span>
+    <span class="s4">'f_fec_cie'</span><span class="s2">: </span><span class="s4">'max'</span><span class="s3">,</span>
+    <span class="s4">'f_cargos'</span><span class="s2">: </span><span class="s4">'sum'</span><span class="s3">,</span>
+    <span class="s4">'f_abonos'</span><span class="s2">: </span><span class="s4">'sum'</span>
+<span class="s3">}).</span><span class="s1">rename</span><span class="s3">(</span><span class="s1">columns</span><span class="s2">=</span><span class="s3">{</span>
+    <span class="s4">'f_folio'</span><span class="s2">: </span><span class="s4">'num_folios'</span><span class="s3">,</span>
+    <span class="s4">'f_fec_ape'</span><span class="s2">: </span><span class="s4">'fec_ape_folio'</span><span class="s3">,</span>
+    <span class="s4">'f_fec_cie'</span><span class="s2">: </span><span class="s4">'fec_cie_folio'</span><span class="s3">,</span>
+    <span class="s4">'f_cargos'</span><span class="s2">: </span><span class="s4">'total_cargos'</span><span class="s3">,</span>
+    <span class="s4">'f_abonos'</span><span class="s2">: </span><span class="s4">'total_abonos'</span>
+<span class="s3">}).</span><span class="s1">reset_index</span><span class="s3">()</span>
+
+<span class="s1">df </span><span class="s2">= </span><span class="s1">df_pac</span><span class="s3">.</span><span class="s1">merge</span><span class="s3">(</span><span class="s1">fol_agg</span><span class="s3">, </span><span class="s1">left_on</span><span class="s2">=</span><span class="s4">'p_num_exp'</span><span class="s3">, </span><span class="s1">right_on</span><span class="s2">=</span><span class="s4">'f_num_exp'</span><span class="s3">, </span><span class="s1">how</span><span class="s2">=</span><span class="s4">'left'</span><span class="s3">)</span>
+
+<span class="s0"># Traer folio+ext para cruzar con facturas y transacciones</span>
+<span class="s1">folio_ext </span><span class="s2">= </span><span class="s1">df_fol</span><span class="s3">[[</span><span class="s4">'f_num_exp'</span><span class="s3">, </span><span class="s4">'f_folio'</span><span class="s3">, </span><span class="s4">'f_folio_ext'</span><span class="s3">]].</span><span class="s1">drop_duplicates</span><span class="s3">(</span><span class="s4">'f_num_exp'</span><span class="s3">, </span><span class="s1">keep</span><span class="s2">=</span><span class="s4">'first'</span><span class="s3">)</span>
+<span class="s1">df </span><span class="s2">= </span><span class="s1">df</span><span class="s3">.</span><span class="s1">merge</span><span class="s3">(</span><span class="s1">folio_ext</span><span class="s3">, </span><span class="s1">on</span><span class="s2">=</span><span class="s4">'f_num_exp'</span><span class="s3">, </span><span class="s1">how</span><span class="s2">=</span><span class="s4">'left'</span><span class="s3">)</span>
+
+<span class="s0"># === 2.3 AGREGAR HOSFFA (facturación) ===</span>
+<span class="s1">fac_agg </span><span class="s2">= </span><span class="s1">df_fac</span><span class="s3">.</span><span class="s1">groupby</span><span class="s3">([</span><span class="s4">'folio'</span><span class="s3">,</span><span class="s4">'ext'</span><span class="s3">]).</span><span class="s1">agg</span><span class="s3">({</span>
+    <span class="s4">'num_fac'</span><span class="s2">: </span><span class="s4">'count'</span><span class="s3">,</span>
+    <span class="s4">'f_fac'</span><span class="s2">: </span><span class="s3">[</span><span class="s4">'min'</span><span class="s3">,</span><span class="s4">'max'</span><span class="s3">],</span>
+    <span class="s4">'total_num'</span><span class="s2">: </span><span class="s4">'sum'</span>
+<span class="s3">}).</span><span class="s1">reset_index</span><span class="s3">()</span>
+
+<span class="s1">fac_agg</span><span class="s3">.</span><span class="s1">columns </span><span class="s2">= </span><span class="s3">[</span><span class="s4">'folio'</span><span class="s3">,</span><span class="s4">'ext'</span><span class="s3">,</span><span class="s4">'num_facturas'</span><span class="s3">,</span><span class="s4">'fec_primera_fac'</span><span class="s3">,</span><span class="s4">'fec_ultima_fac'</span><span class="s3">,</span><span class="s4">'monto_total_fac'</span><span class="s3">]</span>
+
+
+<span class="s1">df </span><span class="s2">= </span><span class="s1">df</span><span class="s3">.</span><span class="s1">merge</span><span class="s3">(</span><span class="s1">fac_agg</span><span class="s3">, </span><span class="s1">left_on</span><span class="s2">=</span><span class="s3">[</span><span class="s4">'f_folio'</span><span class="s3">, </span><span class="s4">'f_folio_ext'</span><span class="s3">], </span><span class="s1">right_on</span><span class="s2">=</span><span class="s3">[</span><span class="s4">'folio'</span><span class="s3">, </span><span class="s4">'ext'</span><span class="s3">], </span><span class="s1">how</span><span class="s2">=</span><span class="s4">'left'</span><span class="s3">)</span>
+
+<span class="s0">#df = df.drop(columns=['folio', 'ext'], errors='ignore')</span>
+
+<span class="s0"># === 2.4 AGREGAR HOSTRANSACTIONES ===</span>
+<span class="s0"># Transacciones totales</span>
+<span class="s1">trans_agg </span><span class="s2">= </span><span class="s1">df_trans</span><span class="s3">.</span><span class="s1">groupby</span><span class="s3">([</span><span class="s4">'folio'</span><span class="s3">,</span><span class="s4">'ext'</span><span class="s3">]).</span><span class="s1">agg</span><span class="s3">({</span>
+    <span class="s4">'consecutivo'</span><span class="s2">: </span><span class="s4">'count'</span><span class="s3">,</span>
+    <span class="s4">'total_num'</span><span class="s2">: </span><span class="s4">'sum'</span>
+<span class="s3">}).</span><span class="s1">rename</span><span class="s3">(</span><span class="s1">columns</span><span class="s2">=</span><span class="s3">{</span><span class="s4">'consecutivo'</span><span class="s2">:</span><span class="s4">'num_transacciones'</span><span class="s3">,</span><span class="s4">'total_num'</span><span class="s2">:</span><span class="s4">'monto_trans'</span><span class="s3">}).</span><span class="s1">reset_index</span><span class="s3">()</span>
+
+<span class="s0"># Transacciones POST primera factura (el ciclo de rework)</span>
+<span class="s1">trans_post </span><span class="s2">= </span><span class="s1">df_trans</span><span class="s3">[</span><span class="s1">df_trans</span><span class="s3">[</span><span class="s4">'fecha'</span><span class="s3">] </span><span class="s2">&gt; </span><span class="s1">df_trans</span><span class="s3">.</span><span class="s1">merge</span><span class="s3">(</span>
+    <span class="s1">fac_agg</span><span class="s3">[[</span><span class="s4">'folio'</span><span class="s3">,</span><span class="s4">'ext'</span><span class="s3">,</span><span class="s4">'fec_primera_fac'</span><span class="s3">]], </span><span class="s1">on</span><span class="s2">=</span><span class="s3">[</span><span class="s4">'folio'</span><span class="s3">,</span><span class="s4">'ext'</span><span class="s3">], </span><span class="s1">how</span><span class="s2">=</span><span class="s4">'left'</span>
+<span class="s3">)[</span><span class="s4">'fec_primera_fac'</span><span class="s3">]]</span>
+
+<span class="s1">trans_post_agg </span><span class="s2">= </span><span class="s1">trans_post</span><span class="s3">.</span><span class="s1">groupby</span><span class="s3">([</span><span class="s4">'folio'</span><span class="s3">,</span><span class="s4">'ext'</span><span class="s3">]).</span><span class="s1">agg</span><span class="s3">({</span>
+    <span class="s4">'consecutivo'</span><span class="s2">: </span><span class="s4">'count'</span><span class="s3">,</span>
+    <span class="s4">'total_num'</span><span class="s2">: </span><span class="s3">[</span><span class="s4">'sum'</span><span class="s3">, </span><span class="s2">lambda </span><span class="s1">x</span><span class="s2">: </span><span class="s3">(</span><span class="s1">x </span><span class="s2">&lt; </span><span class="s6">0</span><span class="s3">).</span><span class="s1">sum</span><span class="s3">()]</span>
+<span class="s3">}).</span><span class="s1">reset_index</span><span class="s3">()</span>
+<span class="s1">trans_post_agg</span><span class="s3">.</span><span class="s1">columns </span><span class="s2">= </span><span class="s3">[</span><span class="s4">'folio'</span><span class="s3">,</span><span class="s4">'ext'</span><span class="s3">,</span><span class="s4">'trans_post_primera'</span><span class="s3">,</span><span class="s4">'monto_post_primera'</span><span class="s3">,</span><span class="s4">'negativas_post_primera'</span><span class="s3">]</span>
+
+<span class="s0"># Transacciones negativas totales</span>
+<span class="s1">neg_agg </span><span class="s2">= </span><span class="s1">df_trans</span><span class="s3">[</span><span class="s1">df_trans</span><span class="s3">[</span><span class="s4">'total_num'</span><span class="s3">] </span><span class="s2">&lt; </span><span class="s6">0</span><span class="s3">].</span><span class="s1">groupby</span><span class="s3">([</span><span class="s4">'folio'</span><span class="s3">,</span><span class="s4">'ext'</span><span class="s3">]).</span><span class="s1">agg</span><span class="s3">({</span>
+    <span class="s4">'total_num'</span><span class="s2">: </span><span class="s3">[</span><span class="s4">'count'</span><span class="s3">,</span><span class="s4">'sum'</span><span class="s3">]</span>
+<span class="s3">}).</span><span class="s1">reset_index</span><span class="s3">()</span>
+<span class="s1">neg_agg</span><span class="s3">.</span><span class="s1">columns </span><span class="s2">= </span><span class="s3">[</span><span class="s4">'folio'</span><span class="s3">,</span><span class="s4">'ext'</span><span class="s3">,</span><span class="s4">'trans_negativas'</span><span class="s3">,</span><span class="s4">'monto_negativo'</span><span class="s3">]</span>
+
+<span class="s0"># Canceladas (adapta el valor de tu campo cancelada)</span>
+<span class="s2">if </span><span class="s4">'cancelada' </span><span class="s2">in </span><span class="s1">df_trans</span><span class="s3">.</span><span class="s1">columns</span><span class="s2">:</span>
+    <span class="s1">can_agg </span><span class="s2">= </span><span class="s1">df_trans</span><span class="s3">[</span><span class="s1">df_trans</span><span class="s3">[</span><span class="s4">'cancelada'</span><span class="s3">] </span><span class="s2">== </span><span class="s4">' '</span><span class="s3">].</span><span class="s1">groupby</span><span class="s3">([</span><span class="s4">'folio'</span><span class="s3">,</span><span class="s4">'ext'</span><span class="s3">]).</span><span class="s1">size</span><span class="s3">().</span><span class="s1">reset_index</span><span class="s3">(</span><span class="s1">name</span><span class="s2">=</span><span class="s4">'trans_canceladas'</span><span class="s3">)</span>
+<span class="s2">else:</span>
+    <span class="s1">can_agg </span><span class="s2">= </span><span class="s1">pd</span><span class="s3">.</span><span class="s1">DataFrame</span><span class="s3">(</span><span class="s1">columns</span><span class="s2">=</span><span class="s3">[</span><span class="s4">'folio'</span><span class="s3">,</span><span class="s4">'ext'</span><span class="s3">,</span><span class="s4">'trans_canceladas'</span><span class="s3">])</span>
+
+<span class="s1">df </span><span class="s2">= </span><span class="s1">df</span><span class="s3">.</span><span class="s1">merge</span><span class="s3">(</span><span class="s1">trans_agg</span><span class="s3">,  </span><span class="s1">left_on</span><span class="s2">=</span><span class="s3">[</span><span class="s4">'f_folio'</span><span class="s3">,</span><span class="s4">'f_folio_ext'</span><span class="s3">], </span><span class="s1">right_on</span><span class="s2">=</span><span class="s3">[</span><span class="s4">'folio'</span><span class="s3">,</span><span class="s4">'ext'</span><span class="s3">], </span><span class="s1">how</span><span class="s2">=</span><span class="s4">'left'</span><span class="s3">)</span>
+<span class="s1">df </span><span class="s2">= </span><span class="s1">df</span><span class="s3">.</span><span class="s1">merge</span><span class="s3">(</span><span class="s1">trans_post_agg</span><span class="s3">,  </span><span class="s1">left_on</span><span class="s2">=</span><span class="s3">[</span><span class="s4">'f_folio'</span><span class="s3">,</span><span class="s4">'f_folio_ext'</span><span class="s3">], </span><span class="s1">right_on</span><span class="s2">=</span><span class="s3">[</span><span class="s4">'folio'</span><span class="s3">,</span><span class="s4">'ext'</span><span class="s3">], </span><span class="s1">how</span><span class="s2">=</span><span class="s4">'left'</span><span class="s3">)</span>
+<span class="s1">df </span><span class="s2">= </span><span class="s1">df</span><span class="s3">.</span><span class="s1">merge</span><span class="s3">(</span><span class="s1">neg_agg</span><span class="s3">, </span><span class="s1">on</span><span class="s2">=</span><span class="s3">[</span><span class="s4">'folio'</span><span class="s3">,</span><span class="s4">'ext'</span><span class="s3">], </span><span class="s1">how</span><span class="s2">=</span><span class="s4">'left'</span><span class="s3">)</span>
+<span class="s1">df </span><span class="s2">= </span><span class="s1">df</span><span class="s3">.</span><span class="s1">merge</span><span class="s3">(</span><span class="s1">can_agg</span><span class="s3">, </span><span class="s1">on</span><span class="s2">=</span><span class="s3">[</span><span class="s4">'folio'</span><span class="s3">,</span><span class="s4">'ext'</span><span class="s3">], </span><span class="s1">how</span><span class="s2">=</span><span class="s4">'left'</span><span class="s3">)</span>
+
+<span class="s0"># === 2.5 AGREGAR HOSREQ + HOSDER ===</span>
+<span class="s1">req_agg </span><span class="s2">= </span><span class="s1">df_req</span><span class="s3">.</span><span class="s1">groupby</span><span class="s3">(</span><span class="s4">'pac_num'</span><span class="s3">).</span><span class="s1">agg</span><span class="s3">({</span>
+    <span class="s4">'num_req'</span><span class="s2">: </span><span class="s4">'count'</span><span class="s3">,</span>
+    <span class="s4">'dep_sol'</span><span class="s2">: </span><span class="s4">'nunique'</span><span class="s3">,</span>
+    <span class="s4">'monto'</span><span class="s2">: </span><span class="s4">'sum'</span>
+<span class="s3">}).</span><span class="s1">rename</span><span class="s3">(</span><span class="s1">columns</span><span class="s2">=</span><span class="s3">{</span><span class="s4">'num_req'</span><span class="s2">:</span><span class="s4">'num_requisiciones'</span><span class="s3">,</span><span class="s4">'dep_sol'</span><span class="s2">:</span><span class="s4">'num_depts_sol'</span><span class="s3">,</span><span class="s4">'monto'</span><span class="s2">:</span><span class="s4">'monto_req'</span><span class="s3">}).</span><span class="s1">reset_index</span><span class="s3">()</span>
+
+<span class="s0"># Requisiciones con diferencia pedido vs surtido (fricción logística)</span>
+<span class="s2">if </span><span class="s1">all</span><span class="s3">(</span><span class="s1">c </span><span class="s2">in </span><span class="s1">df_Hosder</span><span class="s3">.</span><span class="s1">columns </span><span class="s2">for </span><span class="s1">c </span><span class="s2">in </span><span class="s3">[</span><span class="s4">'cant_ped'</span><span class="s3">,</span><span class="s4">'cant_sur'</span><span class="s3">])</span><span class="s2">:</span>
+    <span class="s1">df_der </span><span class="s2">= </span><span class="s1">df_Hosder</span><span class="s3">.</span><span class="s1">copy</span><span class="s3">()</span>
+    <span class="s1">df_der</span><span class="s3">[</span><span class="s4">'cant_ped'</span><span class="s3">] </span><span class="s2">= </span><span class="s1">pd</span><span class="s3">.</span><span class="s1">to_numeric</span><span class="s3">(</span><span class="s1">df_der</span><span class="s3">[</span><span class="s4">'cant_ped'</span><span class="s3">], </span><span class="s1">errors</span><span class="s2">=</span><span class="s4">'coerce'</span><span class="s3">)</span>
+    <span class="s1">df_der</span><span class="s3">[</span><span class="s4">'cant_sur'</span><span class="s3">] </span><span class="s2">= </span><span class="s1">pd</span><span class="s3">.</span><span class="s1">to_numeric</span><span class="s3">(</span><span class="s1">df_der</span><span class="s3">[</span><span class="s4">'cant_sur'</span><span class="s3">], </span><span class="s1">errors</span><span class="s2">=</span><span class="s4">'coerce'</span><span class="s3">)</span>
+    <span class="s1">df_der</span><span class="s3">[</span><span class="s4">'dif_ped_sur'</span><span class="s3">] </span><span class="s2">= </span><span class="s1">df_der</span><span class="s3">[</span><span class="s4">'cant_ped'</span><span class="s3">] </span><span class="s2">- </span><span class="s1">df_der</span><span class="s3">[</span><span class="s4">'cant_sur'</span><span class="s3">]</span>
+
+    <span class="s1">der_agg </span><span class="s2">= </span><span class="s1">df_der</span><span class="s3">.</span><span class="s1">groupby</span><span class="s3">(</span><span class="s4">'num_req'</span><span class="s3">).</span><span class="s1">agg</span><span class="s3">({</span>
+        <span class="s4">'dif_ped_sur'</span><span class="s2">: </span><span class="s4">'sum'</span><span class="s3">,</span>
+        <span class="s4">'devuelve'</span><span class="s2">: lambda </span><span class="s1">x</span><span class="s2">: </span><span class="s3">(</span><span class="s1">x </span><span class="s2">== </span><span class="s4">'S'</span><span class="s3">).</span><span class="s1">sum</span><span class="s3">() </span><span class="s2">if </span><span class="s1">x</span><span class="s3">.</span><span class="s1">dtype </span><span class="s2">== </span><span class="s4">'object' </span><span class="s2">else </span><span class="s6">0</span>
+    <span class="s3">}).</span><span class="s1">rename</span><span class="s3">(</span><span class="s1">columns</span><span class="s2">=</span><span class="s3">{</span><span class="s4">'dif_ped_sur'</span><span class="s2">:</span><span class="s4">'total_dif_ped_sur'</span><span class="s3">,</span><span class="s4">'devuelve'</span><span class="s2">:</span><span class="s4">'num_devoluciones'</span><span class="s3">}).</span><span class="s1">reset_index</span><span class="s3">()</span>
+
+    <span class="s1">df_req_enr </span><span class="s2">= </span><span class="s1">df_req</span><span class="s3">.</span><span class="s1">merge</span><span class="s3">(</span><span class="s1">der_agg</span><span class="s3">, </span><span class="s1">on</span><span class="s2">=</span><span class="s4">'num_req'</span><span class="s3">, </span><span class="s1">how</span><span class="s2">=</span><span class="s4">'left'</span><span class="s3">)</span>
+    <span class="s1">req_fric </span><span class="s2">= </span><span class="s1">df_req_enr</span><span class="s3">.</span><span class="s1">groupby</span><span class="s3">(</span><span class="s4">'pac_num'</span><span class="s3">).</span><span class="s1">agg</span><span class="s3">({</span>
+        <span class="s4">'total_dif_ped_sur'</span><span class="s2">: </span><span class="s4">'sum'</span><span class="s3">,</span>
+        <span class="s4">'num_devoluciones'</span><span class="s2">: </span><span class="s4">'sum'</span>
+    <span class="s3">}).</span><span class="s1">reset_index</span><span class="s3">()</span>
+    <span class="s1">df </span><span class="s2">= </span><span class="s1">df</span><span class="s3">.</span><span class="s1">merge</span><span class="s3">(</span><span class="s1">req_fric</span><span class="s3">, </span><span class="s1">left_on</span><span class="s2">=</span><span class="s4">'p_num_exp'</span><span class="s3">, </span><span class="s1">right_on</span><span class="s2">=</span><span class="s4">'pac_num'</span><span class="s3">, </span><span class="s1">how</span><span class="s2">=</span><span class="s4">'left'</span><span class="s3">)</span>
+
+<span class="s1">df </span><span class="s2">= </span><span class="s1">df</span><span class="s3">.</span><span class="s1">merge</span><span class="s3">(</span><span class="s1">req_agg</span><span class="s3">, </span><span class="s1">left_on</span><span class="s2">=</span><span class="s4">'p_num_exp'</span><span class="s3">, </span><span class="s1">right_on</span><span class="s2">=</span><span class="s4">'pac_num'</span><span class="s3">, </span><span class="s1">how</span><span class="s2">=</span><span class="s4">'left'</span><span class="s3">)</span>
+
+<span class="s0"># === 2.6 AGREGAR HABITACIÓN ===</span>
+<span class="s1">hab </span><span class="s2">= </span><span class="s1">df_Hoshab</span><span class="s3">[[</span><span class="s4">'c_pac_num'</span><span class="s3">,</span><span class="s4">'c_tpo_hab'</span><span class="s3">,</span><span class="s4">'c_area'</span><span class="s3">]].</span><span class="s1">drop_duplicates</span><span class="s3">(</span><span class="s4">'c_pac_num'</span><span class="s3">, </span><span class="s1">keep</span><span class="s2">=</span><span class="s4">'first'</span><span class="s3">)</span>
+<span class="s1">df </span><span class="s2">= </span><span class="s1">df</span><span class="s3">.</span><span class="s1">merge</span><span class="s3">(</span><span class="s1">hab</span><span class="s3">, </span><span class="s1">left_on</span><span class="s2">=</span><span class="s4">'p_num_exp'</span><span class="s3">, </span><span class="s1">right_on</span><span class="s2">=</span><span class="s4">'c_pac_num'</span><span class="s3">, </span><span class="s1">how</span><span class="s2">=</span><span class="s4">'left'</span><span class="s3">)</span>
+<span class="s1">df </span><span class="s2">= </span><span class="s1">df</span><span class="s3">.</span><span class="s1">merge</span><span class="s3">(</span><span class="s1">df_Hostha</span><span class="s3">[[</span><span class="s4">'tpo'</span><span class="s3">,</span><span class="s4">'des'</span><span class="s3">]], </span><span class="s1">left_on</span><span class="s2">=</span><span class="s4">'c_tpo_hab'</span><span class="s3">, </span><span class="s1">right_on</span><span class="s2">=</span><span class="s4">'tpo'</span><span class="s3">, </span><span class="s1">how</span><span class="s2">=</span><span class="s4">'left'</span><span class="s3">)</span>
+
+<span class="s1">print</span><span class="s3">(</span><span class="s4">f&quot;Tabla maestra: </span><span class="s5">{</span><span class="s1">len</span><span class="s3">(</span><span class="s1">df</span><span class="s3">)</span><span class="s5">:</span><span class="s4">,</span><span class="s5">} </span><span class="s4">episodios&quot;</span><span class="s3">)</span>
+<span class="s1">df</span><span class="s3">.</span><span class="s1">head</span><span class="s3">(</span><span class="s6">3</span><span class="s3">)</span>
+<span class="s0">#%% md 
+</span><span class="s1">### Loque ya tenemos: 
+### La tabla maestra denotada como df en el codigo 
+</span><span class="s0">#%% md 
+</span><span class="s1">## Feature Engineering — Tiempos entre Etapas y Flags 
+</span><span class="s0">#%% 
+# Nota: en una hora hay 3600 segundos dado que  60*60 da 3600, de esta manera al dividir entre 3600 tenemos la cantidad en horas</span>
+<span class="s0"># E1: Alta médica → Primera factura</span>
+<span class="s1">df</span><span class="s3">[</span><span class="s4">'t_e1_prefacturacion_hrs'</span><span class="s3">] </span><span class="s2">= </span><span class="s3">(</span><span class="s1">df</span><span class="s3">[</span><span class="s4">'fec_primera_fac'</span><span class="s3">] </span><span class="s2">- </span><span class="s1">df</span><span class="s3">[</span><span class="s4">'p_fec_sda'</span><span class="s3">]).</span><span class="s1">dt</span><span class="s3">.</span><span class="s1">total_seconds</span><span class="s3">() </span><span class="s2">/ </span><span class="s6">3600</span>
+<span class="s0"># E2: Primera factura → Última factura (ciclo de rework)</span>
+<span class="s1">df</span><span class="s3">[</span><span class="s4">'t_e2_ciclo_facturacion_hrs'</span><span class="s3">] </span><span class="s2">= </span><span class="s3">(</span><span class="s1">df</span><span class="s3">[</span><span class="s4">'fec_ultima_fac'</span><span class="s3">] </span><span class="s2">- </span><span class="s1">df</span><span class="s3">[</span><span class="s4">'fec_primera_fac'</span><span class="s3">]).</span><span class="s1">dt</span><span class="s3">.</span><span class="s1">total_seconds</span><span class="s3">() </span><span class="s2">/ </span><span class="s6">3600</span>
+
+
+<span class="s0"># E3: Transacciones post-primera-factura (no es tiempo, es volumen de fricción)</span>
+<span class="s1">df</span><span class="s3">[</span><span class="s4">'t_e3_friccion_financiera'</span><span class="s3">] </span><span class="s2">= </span><span class="s1">df</span><span class="s3">[</span><span class="s4">'trans_post_primera'</span><span class="s3">].</span><span class="s1">fillna</span><span class="s3">(</span><span class="s6">0</span><span class="s3">)</span>
+
+<span class="s0"># E4: Requisiciones / Logística (volumen)</span>
+<span class="s1">df</span><span class="s3">[</span><span class="s4">'t_e4_friccion_logistica'</span><span class="s3">] </span><span class="s2">= </span><span class="s1">df</span><span class="s3">[</span><span class="s4">'num_requisiciones'</span><span class="s3">].</span><span class="s1">fillna</span><span class="s3">(</span><span class="s6">0</span><span class="s3">)</span>
+
+
+<span class="s0"># E5: Última factura → Cierre folio (proxy de cierre administrativo)</span>
+<span class="s1">df</span><span class="s3">[</span><span class="s4">'t_e5_cierre_hrs'</span><span class="s3">] </span><span class="s2">= </span><span class="s3">(</span><span class="s1">df</span><span class="s3">[</span><span class="s4">'fec_cie_folio'</span><span class="s3">] </span><span class="s2">- </span><span class="s1">df</span><span class="s3">[</span><span class="s4">'fec_ultima_fac'</span><span class="s3">]).</span><span class="s1">dt</span><span class="s3">.</span><span class="s1">total_seconds</span><span class="s3">() </span><span class="s2">/ </span><span class="s6">3600</span>
+
+<span class="s0"># Tiempo total proxy (llegada a cierre de folio, o adapta si tienes alta admin explícita)</span>
+<span class="s1">df</span><span class="s3">[</span><span class="s4">'tiempo_total_hrs'</span><span class="s3">] </span><span class="s2">= </span><span class="s3">(</span><span class="s1">df</span><span class="s3">[</span><span class="s4">'fec_cie_folio'</span><span class="s3">] </span><span class="s2">- </span><span class="s1">df</span><span class="s3">[</span><span class="s4">'p_fec_sda'</span><span class="s3">]).</span><span class="s1">dt</span><span class="s3">.</span><span class="s1">total_seconds</span><span class="s3">() </span><span class="s2">/ </span><span class="s6">3600</span>
+
+<span class="s0">#%% md 
+</span><span class="s1">### limpiando negativos (errores de captura) 
+ 
+</span><span class="s0">#%% 
+</span><span class="s2">for </span><span class="s1">col </span><span class="s2">in </span><span class="s3">[</span><span class="s4">'t_e1_prefacturacion_hrs'</span><span class="s3">,</span><span class="s4">'t_e2_ciclo_facturacion_hrs'</span><span class="s3">,</span><span class="s4">'t_e5_cierre_hrs'</span><span class="s3">,</span><span class="s4">'tiempo_total_hrs'</span><span class="s3">]</span><span class="s2">:</span>
+    <span class="s1">df</span><span class="s3">[</span><span class="s1">col</span><span class="s3">] </span><span class="s2">= </span><span class="s1">df</span><span class="s3">[</span><span class="s1">col</span><span class="s3">].</span><span class="s1">where</span><span class="s3">(</span><span class="s1">df</span><span class="s3">[</span><span class="s1">col</span><span class="s3">] </span><span class="s2">&gt;= </span><span class="s6">0</span><span class="s3">, </span><span class="s1">np</span><span class="s3">.</span><span class="s1">nan</span><span class="s3">)</span>
+<span class="s0">#%% 
+</span><span class="s1">df</span><span class="s3">[</span><span class="s4">'t_e1_prefacturacion_hrs'</span><span class="s3">].</span><span class="s1">isna</span><span class="s3">().</span><span class="s1">sum</span><span class="s3">()</span>
+<span class="s0">#%% 
+</span><span class="s1">print</span><span class="s3">(</span><span class="s1">len</span><span class="s3">(</span><span class="s1">df</span><span class="s3">[</span><span class="s4">'t_e1_prefacturacion_hrs'</span><span class="s3">]))</span>
+<span class="s0">#%% 
+</span><span class="s1">print</span><span class="s3">((</span><span class="s6">115593</span><span class="s2">/</span><span class="s6">105093</span><span class="s3">)</span><span class="s2">**-</span><span class="s6">1</span><span class="s3">)</span>
+<span class="s0">#%% md 
+</span>
+<span class="s1">### === 3.2 FLAGS BINARIOS (0/1) === 
+</span><span class="s0">#%% 
+</span>
+<span class="s1">df</span><span class="s3">[</span><span class="s4">'flag_multiples_facturas'</span><span class="s3">] </span><span class="s2">= </span><span class="s3">(</span><span class="s1">df</span><span class="s3">[</span><span class="s4">'num_facturas'</span><span class="s3">] </span><span class="s2">&gt; </span><span class="s6">1</span><span class="s3">).</span><span class="s1">astype</span><span class="s3">(</span><span class="s1">int</span><span class="s3">)</span>
+<span class="s1">df</span><span class="s3">[</span><span class="s4">'flag_multiples_folios'</span><span class="s3">] </span><span class="s2">= </span><span class="s3">(</span><span class="s1">df</span><span class="s3">[</span><span class="s4">'num_folios'</span><span class="s3">] </span><span class="s2">&gt; </span><span class="s6">1</span><span class="s3">).</span><span class="s1">astype</span><span class="s3">(</span><span class="s1">int</span><span class="s3">)</span>
+<span class="s1">df</span><span class="s3">[</span><span class="s4">'flag_trans_negativas'</span><span class="s3">] </span><span class="s2">= </span><span class="s3">(</span><span class="s1">df</span><span class="s3">[</span><span class="s4">'trans_negativas'</span><span class="s3">] </span><span class="s2">&gt; </span><span class="s6">0</span><span class="s3">).</span><span class="s1">astype</span><span class="s3">(</span><span class="s1">int</span><span class="s3">)</span>
+<span class="s1">df</span><span class="s3">[</span><span class="s4">'flag_trans_canceladas'</span><span class="s3">] </span><span class="s2">= </span><span class="s3">(</span><span class="s1">df</span><span class="s3">[</span><span class="s4">'trans_canceladas'</span><span class="s3">] </span><span class="s2">&gt; </span><span class="s6">0</span><span class="s3">).</span><span class="s1">astype</span><span class="s3">(</span><span class="s1">int</span><span class="s3">)</span>
+<span class="s1">df</span><span class="s3">[</span><span class="s4">'flag_post_primera_fac'</span><span class="s3">] </span><span class="s2">= </span><span class="s3">(</span><span class="s1">df</span><span class="s3">[</span><span class="s4">'trans_post_primera'</span><span class="s3">] </span><span class="s2">&gt; </span><span class="s6">0</span><span class="s3">).</span><span class="s1">astype</span><span class="s3">(</span><span class="s1">int</span><span class="s3">)</span>
+<span class="s1">df</span><span class="s3">[</span><span class="s4">'flag_muchas_transacciones'</span><span class="s3">] </span><span class="s2">= </span><span class="s3">(</span><span class="s1">df</span><span class="s3">[</span><span class="s4">'num_transacciones'</span><span class="s3">] </span><span class="s2">&gt; </span><span class="s1">df</span><span class="s3">[</span><span class="s4">'num_transacciones'</span><span class="s3">].</span><span class="s1">median</span><span class="s3">()).</span><span class="s1">astype</span><span class="s3">(</span><span class="s1">int</span><span class="s3">)</span>
+<span class="s1">df</span><span class="s3">[</span><span class="s4">'flag_muchas_requisiciones'</span><span class="s3">] </span><span class="s2">= </span><span class="s3">(</span><span class="s1">df</span><span class="s3">[</span><span class="s4">'num_requisiciones'</span><span class="s3">] </span><span class="s2">&gt; </span><span class="s1">df</span><span class="s3">[</span><span class="s4">'num_requisiciones'</span><span class="s3">].</span><span class="s1">median</span><span class="s3">()).</span><span class="s1">astype</span><span class="s3">(</span><span class="s1">int</span><span class="s3">)</span>
+<span class="s1">df</span><span class="s3">[</span><span class="s4">'flag_dif_ped_sur'</span><span class="s3">] </span><span class="s2">= </span><span class="s3">(</span><span class="s1">df</span><span class="s3">[</span><span class="s4">'total_dif_ped_sur'</span><span class="s3">].</span><span class="s1">fillna</span><span class="s3">(</span><span class="s6">0</span><span class="s3">) </span><span class="s2">&gt; </span><span class="s6">0</span><span class="s3">).</span><span class="s1">astype</span><span class="s3">(</span><span class="s1">int</span><span class="s3">)</span>
+<span class="s1">df</span><span class="s3">[</span><span class="s4">'flag_retraso_total'</span><span class="s3">] </span><span class="s2">= </span><span class="s3">(</span><span class="s1">df</span><span class="s3">[</span><span class="s4">'tiempo_total_hrs'</span><span class="s3">] </span><span class="s2">&gt; </span><span class="s6">24</span><span class="s3">).</span><span class="s1">astype</span><span class="s3">(</span><span class="s1">int</span><span class="s3">)</span>
+<span class="s1">df</span><span class="s3">[</span><span class="s4">'flag_critico'</span><span class="s3">] </span><span class="s2">= </span><span class="s3">(</span><span class="s1">df</span><span class="s3">[</span><span class="s4">'tiempo_total_hrs'</span><span class="s3">] </span><span class="s2">&gt; </span><span class="s6">72</span><span class="s3">).</span><span class="s1">astype</span><span class="s3">(</span><span class="s1">int</span><span class="s3">)</span>
+<span class="s0">#%% md 
+</span><span class="s1">### genenrando la variable objetivo (vamos a usar Machine learning para encontrar los cuellos de botella) 
+</span><span class="s0">#%% 
+</span><span class="s2">def </span><span class="s1">clasificar_retraso</span><span class="s3">(</span><span class="s1">h</span><span class="s3">)</span><span class="s2">:</span>
+    <span class="s2">if </span><span class="s1">pd</span><span class="s3">.</span><span class="s1">isna</span><span class="s3">(</span><span class="s1">h</span><span class="s3">)</span><span class="s2">: return </span><span class="s4">'incompleto'</span>
+    <span class="s2">if </span><span class="s1">h </span><span class="s2">&lt;= </span><span class="s6">24</span><span class="s2">: return </span><span class="s4">'rapido'</span>
+    <span class="s2">if </span><span class="s1">h </span><span class="s2">&lt;= </span><span class="s6">72</span><span class="s2">: return </span><span class="s4">'moderado'</span>
+    <span class="s2">if </span><span class="s1">h </span><span class="s2">&lt;= </span><span class="s6">168</span><span class="s2">: return </span><span class="s4">'alto'</span>
+    <span class="s2">return </span><span class="s4">'critico'</span>
+
+<span class="s0">#%% 
+</span><span class="s1">df</span><span class="s3">[</span><span class="s4">'clase_retraso'</span><span class="s3">] </span><span class="s2">= </span><span class="s1">df</span><span class="s3">[</span><span class="s4">'tiempo_total_hrs'</span><span class="s3">].</span><span class="s1">apply</span><span class="s3">(</span><span class="s1">clasificar_retraso</span><span class="s3">)</span>
+
+<span class="s1">print</span><span class="s3">(</span><span class="s4">&quot;Distribución de clases:&quot;</span><span class="s3">)</span>
+<span class="s1">print</span><span class="s3">(</span><span class="s1">df</span><span class="s3">[</span><span class="s4">'clase_retraso'</span><span class="s3">].</span><span class="s1">value_counts</span><span class="s3">())</span>
+<span class="s0">#%% 
+</span></pre>
+</body>
+</html>

@@ -1,0 +1,7 @@
+etapa,descripcion,tiempo_promedio_horas,tiempo_promedio_dias,tiempo_mediana_horas,tiempo_mediana_dias,num_episodios_validos,pct_sobre_total,nota,alerta_outlier
+E1_AltaMedica_PrimeraFactura,Alta médica → Primera factura,202.26,8.4,0.0,<1,6337,5.48,"Usa p_fec_sda (legacy, 45k/115k cobertura)",ALERTA: mediana 0 con promedio alto. Revisar si fechas tienen hora o solo fecha.
+E2_PrimeraUltimaFactura,Primera factura → Última factura (ciclo de rework),164.35,6.8,0.0,<1,20703,17.91,,ALERTA: mediana 0 con promedio alto. Revisar si fechas tienen hora o solo fecha.
+E3_PrimeraUltimaTransaccion,Primera transacción → Última transacción,188.13,7.8,0.0,<1,15225,13.17,,ALERTA: mediana 0 con promedio alto. Revisar si fechas tienen hora o solo fecha.
+E4_PrimeraUltimaRequisicion,Primera requisición → Última requisición,,,,,0,0.0,No calculable: pac_num (HOSREQ) no cruza con p_num_exp (HOSPAC). Llaves incompatibles.,
+E5_UltimaFactura_CierreFolio,Última factura → Cierre de folio (proxy alta administrativa),91.79,3.8,0.0,<1,12765,11.04,Proxy: f_fec_cie usado porque FechaAltaAdministrativa tiene cobertura insuficiente,ALERTA: mediana 0 con promedio alto. Revisar si fechas tienen hora o solo fecha.
+E0_TotalProceso,Alta médica → Cierre de folio (tiempo total proxy),3.88,0.2,0.0,<1,27997,24.22,Proxy del proceso completo usando fechas con mayor cobertura,

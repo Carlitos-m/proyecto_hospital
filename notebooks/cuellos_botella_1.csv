@@ -1,0 +1,6 @@
+etapa,descripcion,tiempo_promedio_horas,tiempo_mediana_horas,num_episodios_validos,pct_sobre_total,nota,alerta_outlier
+E1_AltaMedica_PrimeraFactura,Alta médica → Primera factura,1443.14,456.0,1389,1.2,,"ALERTA: promedio >> mediana, revisar outliers"
+E2_PrimeraUltimaFactura,Primera factura → Última factura (ciclo de rework),869.48,0.0,25553,22.11,,"ALERTA: promedio >> mediana, revisar outliers"
+E3_PrimeraUltimaTransaccion,Primera transacción → Última transacción,1726.02,312.0,25535,22.09,,"ALERTA: promedio >> mediana, revisar outliers"
+E4_PrimeraUltimaRequisicion,Primera requisición → Última requisición,,,0,0.0,No calculable: llave pac_num no cruza,
+E5_UltimaFactura_AltaAdministrativa,Última factura → Alta administrativa,1173.96,360.0,6145,5.32,,"ALERTA: promedio >> mediana, revisar outliers"
