@@ -1,0 +1,6 @@
+﻿etapa,tiempo_promedio_horas,tiempo_mediana_horas,num_episodios_validos
+Alta medica -> Primera factura,1598.31,1157.97,276
+Primera factura -> Ultima factura,2977.37,3528.0,2649
+Primera transaccion -> Ultima transaccion,4395.27,4368.0,11432
+Primera requisicion -> Ultima requisicion,3816.78,3912.0,4641
+Ultima factura -> Alta administrativa,1379.05,22.05,6032

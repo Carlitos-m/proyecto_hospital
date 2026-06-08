@@ -1,0 +1,7 @@
+﻿tipo_fila,categoria,conteo_episodios,promedio_transacciones_por_episodio,pct_con_transacciones_negativas,pct_con_cancelaciones,monto_total_transacciones,tiempo_promedio_alta_admin_horas,fuente
+kpi,global,30203,1.62,0.0,0.0,85315467.93,21.18,Proxy Hosfol (Hostransacciones no disponible como CSV)
+por_negativas,Sin negativas,30203,,,,85315467.93,21.18,
+rango_transacciones,0,18768,,,,,32.04,
+rango_transacciones,1-3,8929,,,,,18.16,
+rango_transacciones,3-5,2503,,,,,13.81,
+rango_transacciones,5-10,1,,,,,,

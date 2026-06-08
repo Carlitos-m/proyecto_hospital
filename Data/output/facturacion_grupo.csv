@@ -1,0 +1,4 @@
+﻿grupo_facturacion,conteo_episodios,tiempo_promedio_alta_admin_horas,tiempo_mediana_alta_admin_horas,tiempo_promedio_ciclo_facturacion_horas,monto_total_facturas,promedio_facturas_por_episodio,pct_del_total
+1 factura,9299,29.45,0.99,0.0,44963745.0,1.0,30.79
+2+ facturas,2723,11.19,0.86,2896.46,31484863.04,2.28,9.02
+Sin facturas,18181,19.93,4.97,0.0,0.0,0.0,60.2

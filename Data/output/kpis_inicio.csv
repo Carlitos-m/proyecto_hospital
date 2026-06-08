@@ -1,0 +1,25 @@
+﻿kpi,valor,descripcion,tipo_fila,categoria,conteo_episodios
+total_episodios,30203.0,Total de episodios en el sistema,kpi_global,,
+episodios_con_alta_medica,6091.0,Episodios con fecha de alta medica registrada,kpi_global,,
+episodios_con_alta_administrativa,24826.0,Episodios con fecha de alta administrativa registrada,kpi_global,,
+episodios_pendientes,94.0,Episodios con alta medica pero sin alta administrativa,kpi_global,,
+episodios_sin_trazabilidad,5283.0,Episodios sin fecha de alta medica ni administrativa,kpi_global,,
+tiempo_promedio_alta_admin_horas,21.18,Promedio de horas entre alta medica y alta administrativa (excluye negativos),kpi_global,,
+tiempo_mediana_alta_admin_horas,1.72,Mediana de horas entre alta medica y alta administrativa,kpi_global,,
+porcentaje_retraso_24h,1.25,Porcentaje de episodios cerrados con mas de 24h de retraso,kpi_global,,
+porcentaje_casos_criticos,0.16,Porcentaje de episodios con nivel de retraso Critico (>168h),kpi_global,,
+,,,por_estatus,Cerrado,24826.0
+,,,por_estatus,Pendiente,94.0
+,,,por_estatus,Sin trazabilidad suficiente,5283.0
+,,,por_nivel_retraso,Rapido,2026.0
+,,,por_nivel_retraso,Moderado,257.0
+,,,por_nivel_retraso,Alto,74.0
+,,,por_nivel_retraso,Critico,48.0
+,,,por_nivel_retraso,,27798.0
+,,,rango_tiempo,Sin alta medica,102.0
+,,,rango_tiempo,0-12h,1577.0
+,,,rango_tiempo,12-24h,347.0
+,,,rango_tiempo,24-48h,196.0
+,,,rango_tiempo,48-72h,61.0
+,,,rango_tiempo,72-168h,74.0
+,,,rango_tiempo,>168h,48.0

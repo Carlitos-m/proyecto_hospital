@@ -1,0 +1,36 @@
+﻿tipo_fila,categoria,conteo_episodios,num_facturas,promedio_facturas_por_episodio,pct_episodios_multiples_facturas,tiempo_promedio_ciclo_facturacion_horas,max_facturas_episodio,episodio_max_facturas,tiempo_promedio_alta_admin_horas,episodio_id,folio,ext,fecha_primera_factura,fecha_ultima_factura,tiempo_ciclo_facturacion_horas,nivel_retraso,tiempo_alta_admin_horas
+kpi,global,30203.0,,0.51,9.02,2977.37,7.0,316_0,21.18,,,,,,,,
+por_num_facturas,0.0 factura(s),18181.0,0.0,,,0.0,,,19.93,,,,,,,,
+por_num_facturas,1.0 factura(s),9299.0,1.0,,,0.0,,,29.45,,,,,,,,
+por_num_facturas,2.0 factura(s),2097.0,2.0,,,2752.27,,,12.3,,,,,,,,
+por_num_facturas,3.0 factura(s),518.0,3.0,,,3333.64,,,5.97,,,,,,,,
+por_num_facturas,4.0 factura(s),91.0,4.0,,,3589.71,,,4.41,,,,,,,,
+por_num_facturas,5.0 factura(s),15.0,5.0,,,3536.0,,,78.92,,,,,,,,
+por_num_facturas,6.0 factura(s),1.0,6.0,,,4128.0,,,,,,,,,,,
+por_num_facturas,7.0 factura(s),1.0,7.0,,,4872.0,,,26.07,,,,,,,,
+por_grupo,1 factura,9299.0,,,,0.0,,,29.45,,,,,,,,
+por_grupo,2+ facturas,2723.0,,,,2896.46,,,11.19,,,,,,,,
+rango_ciclo,12-24h,37.0,,,,,,,,,,,,,,,
+rango_ciclo,24-48h,23.0,,,,,,,,,,,,,,,
+rango_ciclo,48-72h,22.0,,,,,,,,,,,,,,,
+rango_ciclo,>72h,2567.0,,,,,,,,,,,,,,,
+top_episodios,,,7.0,,,,,,,316_0,316,0,2024-10-05,2025-04-26,4872.0,Moderado,26.07
+top_episodios,,,6.0,,,,,,,1605_0,1605,0,2024-10-12,2025-04-02,4128.0,,
+top_episodios,,,5.0,,,,,,,516_0,516,0,2025-01-16,2025-06-20,3720.0,Rapido,3.42
+top_episodios,,,5.0,,,,,,,482_0,482,0,2025-01-10,2025-06-08,3576.0,,
+top_episodios,,,5.0,,,,,,,380_0,380,0,2024-10-04,2025-05-14,5328.0,Rapido,0.24
+top_episodios,,,5.0,,,,,,,334_0,334,0,2024-10-05,2025-04-30,4968.0,,
+top_episodios,,,5.0,,,,,,,1856_0,1856,0,2024-10-15,2025-04-28,4680.0,,
+top_episodios,,,5.0,,,,,,,1845_0,1845,0,2025-03-03,2025-04-27,1320.0,,
+top_episodios,,,5.0,,,,,,,1752_0,1752,0,2024-10-14,2025-04-18,4464.0,,
+top_episodios,,,5.0,,,,,,,257_0,257,0,2024-10-05,2025-04-12,4536.0,,
+top_episodios,,,5.0,,,,,,,233_0,233,0,2024-10-05,2025-04-06,4392.0,Rapido,1.35
+top_episodios,,,5.0,,,,,,,1986_0,1986,0,2025-03-05,2025-05-15,1704.0,,
+top_episodios,,,5.0,,,,,,,144_0,144,0,2024-10-03,2025-02-13,3192.0,,
+top_episodios,,,5.0,,,,,,,1253_0,1253,0,2024-10-10,2025-04-14,4464.0,,
+top_episodios,,,5.0,,,,,,,21_0,21,0,2024-10-03,2025-02-25,3480.0,,
+top_episodios,,,5.0,,,,,,,763_0,763,0,2025-01-30,2025-03-04,792.0,Critico,310.68
+top_episodios,,,5.0,,,,,,,34_0,34,0,2024-12-09,2025-03-20,2424.0,,
+top_episodios,,,4.0,,,,,,,527_0,527,0,2025-01-14,2025-06-21,3792.0,,
+top_episodios,,,4.0,,,,,,,2453_0,2453,0,2024-10-17,2025-06-19,5880.0,,
+top_episodios,,,4.0,,,,,,,2388_0,2388,0,2025-03-10,2025-06-13,2280.0,Rapido,2.29

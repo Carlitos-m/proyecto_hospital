@@ -1,0 +1,69 @@
+﻿tipo_fila,categoria,dep_sol_principal,conteo_episodios,conteo_episodios_con_req,num_requisiciones,monto_total_requisiciones,tiempo_promedio_alta_admin_horas,nivel_retraso_predominante,promedio_requisiciones_por_episodio,pct_con_requisiciones,promedio_items_por_requisicion,episodio_id,folio,ext,descripcion
+kpi,global,,30203.0,14651.0,,102391264.64,17.94,Rapido,2.7,48.51,17.67,,,,KPI globales de requisiciones
+por_departamento,CAG,CAG,20.0,,41.0,111226.04,50.56,Rapido,,,,,,,
+por_departamento,LPM,LPM,53.0,,205.0,191269.11,38.99,Rapido,,,,,,,
+por_departamento,MAL,MAL,781.0,,7160.0,32041463.55,36.74,Rapido,,,,,,,
+por_departamento,LAB,LAB,2223.0,,2759.0,5304739.66,26.88,Rapido,,,,,,,
+por_departamento,IMA,IMA,2225.0,,3191.0,9868502.49,26.03,Rapido,,,,,,,
+por_departamento,IMP,IMP,699.0,,1059.0,2747187.17,24.98,Rapido,,,,,,,
+por_departamento,CEX,CEX,37.0,,71.0,37131.18,21.42,Rapido,,,,,,,
+por_departamento,CJA,CJA,37.0,,79.0,64329.34,20.62,Moderado,,,,,,,
+por_departamento,FAR,FAR,3687.0,,5790.0,3677095.54,19.23,Rapido,,,,,,,
+por_departamento,IMT,IMT,163.0,,384.0,758831.43,18.43,Rapido,,,,,,,
+por_departamento,SUB,SUB,858.0,,7246.0,26477375.53,17.73,Rapido,,,,,,,
+por_departamento,FPM,FPM,335.0,,2407.0,3801258.78,13.88,Rapido,,,,,,,
+por_departamento,LAP,LAP,298.0,,555.0,1112857.88,13.78,Rapido,,,,,,,
+por_departamento,SER,SER,274.0,,758.0,3162080.9,13.37,Rapido,,,,,,,
+por_departamento,CAF,CAF,1302.0,,2079.0,1139558.37,12.38,Rapido,,,,,,,
+por_departamento,CGT,CGT,5.0,,14.0,8463.94,11.89,Rapido,,,,,,,
+por_departamento,FAM,FAM,78.0,,234.0,287519.85,11.63,Rapido,,,,,,,
+por_departamento,ICU,ICU,2.0,,5.0,10115.98,10.47,Rapido,,,,,,,
+por_departamento,SEM,SEM,3.0,,16.0,13635.85,9.75,Rapido,,,,,,,
+por_departamento,IPM,IPM,102.0,,284.0,319883.42,9.1,Rapido,,,,,,,
+por_departamento,CEP,CEP,3.0,,7.0,5039.82,8.16,Rapido,,,,,,,
+por_departamento,SPM,SPM,23.0,,130.0,213386.3,6.79,Rapido,,,,,,,
+por_departamento,PTU,PTU,8.0,,8.0,2627.76,5.65,Rapido,,,,,,,
+por_departamento,LAT,LAT,71.0,,222.0,355826.6,5.23,Rapido,,,,,,,
+por_departamento,PAT,PAT,550.0,,682.0,732617.92,4.41,Rapido,,,,,,,
+por_departamento,FAT,FAT,556.0,,3327.0,7894592.89,4.4,Rapido,,,,,,,
+por_departamento,SET,SET,21.0,,150.0,313654.0,3.33,Rapido,,,,,,,
+por_departamento,SEP,SEP,46.0,,134.0,541299.39,2.16,Rapido,,,,,,,
+por_departamento,FQA,FQA,115.0,,424.0,1141864.22,1.0,Rapido,,,,,,,
+por_departamento,CGC,CGC,8.0,,21.0,-2606.25,0.88,Rapido,,,,,,,
+por_departamento,PPY,PPY,40.0,,45.0,24698.76,0.06,Rapido,,,,,,,
+por_departamento,AGC,AGC,1.0,,5.0,7181.08,,,,,,,,,
+por_departamento,ALM,ALM,1.0,,1.0,1155.36,,,,,,,,,
+por_departamento,CGP,CGP,4.0,,11.0,3980.16,,,,,,,,,
+por_departamento,CHS,CHS,1.0,,1.0,73.13,,,,,,,,,
+por_departamento,ENF,ENF,2.0,,12.0,5806.45,,,,,,,,,
+por_departamento,HOS,HOS,10.0,,17.0,1848.46,,,,,,,,,
+por_departamento,PAM,PAM,4.0,,17.0,8405.33,,,,,,,,,
+por_departamento,QUI,QUI,1.0,,2.0,0.0,,,,,,,,,
+por_departamento,URG,URG,1.0,,1.0,0.0,,,,,,,,,
+por_departamento,URM,URM,1.0,,1.0,0.0,,,,,,,,,
+por_departamento,URP,URP,2.0,,13.0,5287.25,,,,,,,,,
+rango_requisiciones,0,,15552.0,,,0.0,27.31,,,,,,,,
+rango_requisiciones,1-2,,11916.0,,,17680368.55,18.03,,,,,,,,
+rango_requisiciones,3-5,,1658.0,,,9975388.29,12.55,,,,,,,,
+rango_requisiciones,6-10,,548.0,,,11343758.88,18.03,,,,,,,,
+rango_requisiciones,>10,,529.0,,,63391748.92,54.8,,,,,,,,
+top_episodios,,MAL,,,775.0,7339548.78,,,,,,3408_0,3408,0,Depto: MAL
+top_episodios,,SUB,,,343.0,1208107.12,,,,,,35376_0,35376,0,Depto: SUB
+top_episodios,,SUB,,,251.0,36419.689999999995,,,,,,18753_0,18753,0,Depto: SUB
+top_episodios,,MAL,,,241.0,3850245.31,,,,,,11090_0,11090,0,Depto: MAL
+top_episodios,,SUB,,,166.0,898290.03,,,,,,14294_0,14294,0,Depto: SUB
+top_episodios,,FPM,,,161.0,161858.03,,,,,,1597_0,1597,0,Depto: FPM
+top_episodios,,MAL,,,144.0,212290.19,,,,,,9962_0,9962,0,Depto: MAL
+top_episodios,,MAL,,,135.0,1628147.7,,,,,,10792_0,10792,0,Depto: MAL
+top_episodios,,SUB,,,126.0,1009174.59,,,,,,5181_0,5181,0,Depto: SUB
+top_episodios,,SUB,,,119.0,246658.66,,,,,,15801_0,15801,0,Depto: SUB
+top_episodios,,SUB,,,117.0,175120.02,,,,,,28274_0,28274,0,Depto: SUB
+top_episodios,,FAT,,,114.0,259213.83,,,,,,2344_0,2344,0,Depto: FAT
+top_episodios,,MAL,,,110.0,541744.3,,,,,,1162_0,1162,0,Depto: MAL
+top_episodios,,MAL,,,106.0,405976.98,,,,,,6531_0,6531,0,Depto: MAL
+top_episodios,,MAL,,,106.0,607069.43,,,,,,5257_0,5257,0,Depto: MAL
+top_episodios,,SUB,,,100.0,46001.53,,,,,,29123_0,29123,0,Depto: SUB
+top_episodios,,MAL,,,99.0,1146828.6,,,,,,10791_0,10791,0,Depto: MAL
+top_episodios,,MAL,,,99.0,1052824.32,,,,,,8288_0,8288,0,Depto: MAL
+top_episodios,,SUB,,,94.0,148827.51,,,,,,21399_0,21399,0,Depto: SUB
+top_episodios,,SUB,,,93.0,1385023.1300000001,,,,,,47860_0,47860,0,Depto: SUB
