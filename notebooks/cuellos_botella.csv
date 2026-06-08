@@ -1,7 +1,6 @@
 etapa,descripcion,tiempo_promedio_horas,tiempo_mediana_horas,num_episodios_validos,pct_sobre_total,nota,alerta_outlier
-E1_AltaMedica_PrimeraFactura,Alta médica (p_fec_sda) → Primera factura (HOSFFA),791.03,0.0,7637,6.61,,"ALERTA: promedio alto con mediana 0, revisar outliers"
-E2_PrimeraUltimaFactura,Primera factura → Última factura (ciclo de rework),869.48,0.0,25553,22.11,,"ALERTA: promedio alto con mediana 0, revisar outliers"
-E3_PrimeraUltimaTransaccion,Primera transacción → Última transacción,1726.02,312.0,25535,22.09,,"ALERTA: promedio >> mediana, revisar outliers"
-E4_PrimeraUltimaRequisicion,Primera requisición → Última requisición,,,0,0.0,No calculable: llave pac_num no cruza con p_num_exp,
-E5_UltimaFactura_CierreFolio,Última factura → Cierre de folio (proxy alta administrativa),521.97,0.0,14379,12.44,Proxy: usa f_fec_cie porque FechaAltaAdministrativa tiene cobertura insuficiente (33k/115k),"ALERTA: promedio alto con mediana 0, revisar outliers"
-E0_TotalProceso,Alta médica → Cierre de folio (tiempo total proxy),4.95,0.0,28004,24.23,Proxy del proceso completo usando fechas legacy con mayor cobertura,
+E1_AltaMedica_PrimeraFactura,Alta médica → Primera factura,202.26,0.0,6337,5.59,"Validado: OK: folio+ext pertenecen al mismo p_num_exp y f_area. Base: 113,315 episodios.",ALERTA: mediana 0 porque sistema legacy registra fecha sin hora. Promedio puede estar influido por casos extremos.
+E2_PrimeraUltimaFactura,Primera factura → Última factura (ciclo de rework),164.35,0.0,20703,18.27,"Validado: OK: folio+ext pertenecen al mismo p_num_exp y f_area. Base: 113,315 episodios.",ALERTA: mediana 0 porque sistema legacy registra fecha sin hora. Promedio puede estar influido por casos extremos.
+E3_PrimeraUltimaTransaccion,Primera transacción → Última transacción,188.13,0.0,15225,13.44,"Validado: OK: folio+ext pertenecen al mismo p_num_exp y f_area. Base: 113,315 episodios.",ALERTA: mediana 0 porque sistema legacy registra fecha sin hora. Promedio puede estar influido por casos extremos.
+E5_UltimaFactura_CierreFolio,Última factura → Cierre de folio (proxy alta administrativa),91.79,0.0,12765,11.27,"Validado: OK: folio+ext pertenecen al mismo p_num_exp y f_area. Base: 113,315 episodios.",ALERTA: mediana 0 porque sistema legacy registra fecha sin hora. Promedio puede estar influido por casos extremos.
+E4_PrimeraUltimaRequisicion,Primera requisición → Última requisición,,,0,0.0,No calculable: pac_num (HOSREQ) no cruza con p_num_exp (HOSPAC). Llaves incompatibles.,
